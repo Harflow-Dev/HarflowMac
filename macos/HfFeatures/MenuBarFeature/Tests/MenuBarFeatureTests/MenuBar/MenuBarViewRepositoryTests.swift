@@ -23,6 +23,53 @@ import Testing
         #expect(sut.title("abc123") == "Fix the bug")
     }
     
+    @Test func givenSetupState_whenRead_thenRuntimeReadyMapsFromIt() {
+        // given
+        let install = MockInstallRepository()
+        given(install).setupState.willReturn(.ready)
+        let sut = MenuBarViewRepository(installRepository: install)
+
+        // then
+        #expect(sut.runtimeReady)
+    }
+
+    @Test func givenARuntimeThatIsNotReady_whenRead_thenRuntimeReadyIsFalse() {
+        // given
+        let install = MockInstallRepository()
+        given(install).setupState.willReturn(.checking)
+        let sut = MenuBarViewRepository(installRepository: install)
+
+        // then
+        #expect(sut.runtimeReady == false)
+    }
+
+    /// Built outside the main actor so the sink closure is not main-actor isolated and may receive off the main thread.
+    private nonisolated static func collect(_ publisher: AnyPublisher<Bool, Never>, into box: LockedBox<[Bool]>) -> AnyCancellable {
+        publisher.sink { value in box.mutate { $0.append(value) } }
+    }
+
+    @Test func givenSetupStatesFromABackgroundQueue_whenMappedToReadiness_thenDuplicatesAreDroppedWithoutTrapping() async {
+        // given
+        let subject = PassthroughSubject<RuntimeSetupState, Never>()
+        let received = LockedBox<[Bool]>([])
+        let token = Self.collect(MenuBarViewRepository.readiness(subject.eraseToAnyPublisher()), into: received)
+
+        // when
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global().async {
+                subject.send(.checking)
+                subject.send(.ready)
+                subject.send(.ready)
+                subject.send(.checking)
+                continuation.resume()
+            }
+        }
+
+        // then
+        #expect(received.value == [false, true, false])
+        withExtendedLifetime(token) {}
+    }
+
     @Test func givenAcquireEventLease_whenCalled_thenItPassesThroughToEventStreamRepository() {
         // given
         let eventStream = MockEventStreamRepository()

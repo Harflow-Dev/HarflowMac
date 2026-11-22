@@ -5,7 +5,7 @@ import Testing
 
 @Suite struct SettingsRepositoryImplTests {
 
-    @Test func givenNoStoredValue_whenRead_thenTheDefaultIsToolDirectoryEmptyAndTogglesTrue() {
+    @Test func givenNoStoredValue_whenRead_thenTheTogglesDefaultToTrue() {
         // given
         let scratch = ScratchDefaults()
         defer { scratch.remove() }
@@ -16,7 +16,6 @@ import Testing
 
         // then — F8: a key that was never written must read its registered default, not
         // `UserDefaults.bool(forKey:)`'s own `false` for a missing key.
-        #expect(sut.toolDirectory == "")
         #expect(sut.openWindowOnStart == true)
         #expect(sut.notifyOnFinish == true)
         #expect(sut.appAppearance == .system)
@@ -89,21 +88,6 @@ import Testing
         #expect(sut.notifyOnFinish == true)
     }
 
-    @Test func givenAWrite_whenRead_thenItIsImmediateAndPersistedToUserDefaults() {
-        // given
-        let scratch = ScratchDefaults()
-        defer { scratch.remove() }
-        let defaults = scratch.defaults
-        let sut = SettingsRepositoryImpl(defaults: defaults)
-
-        // when
-        sut.setToolDirectory("/opt/homebrew/bin")
-
-        // then
-        #expect(sut.toolDirectory == "/opt/homebrew/bin")
-        #expect(defaults.string(forKey: SettingsRepositoryImpl.toolDirectoryKey) == "/opt/homebrew/bin")
-    }
-
     @Test func givenASettingWrite_whenObservedFromTwoReaders_thenBothSeeItLive() async {
         // given
         let scratch = ScratchDefaults()
@@ -124,45 +108,26 @@ import Testing
         withExtendedLifetime((cancellableA, cancellableB)) {}
     }
 
-    @Test func givenToolDirectoryAlreadyStored_whenConstructed_thenItReadsTheStoredValueNotTheDefault() {
-        // given
-        let scratch = ScratchDefaults()
-        defer { scratch.remove() }
-        let defaults = scratch.defaults
-        defaults.set("/usr/local/bin", forKey: SettingsRepositoryImpl.toolDirectoryKey)
-
-        // when
-        let sut = SettingsRepositoryImpl(defaults: defaults)
-
-        // then
-        #expect(sut.toolDirectory == "/usr/local/bin")
-    }
-
     @Test func givenSettingsSubscribers_whenIdenticalValuesRepeat_thenInitialAndChangedValuesRemain() {
         // given
         let scratch = ScratchDefaults()
         defer { scratch.remove() }
         let defaults = scratch.defaults
         let sut = SettingsRepositoryImpl(defaults: defaults)
-        var directories: [String] = []
         var openings: [Bool] = []
         var notifications: [Bool] = []
         let subscriptions = [
-            sut.toolDirectoryPublisher().sink { directories.append($0) },
             sut.openWindowOnStartPublisher().sink { openings.append($0) },
             sut.notifyOnFinishPublisher().sink { notifications.append($0) }
         ]
         // when
-        for value in ["", "/fixture/tools", "/fixture/tools", ""] { sut.setToolDirectory(value) }
         for value in [true, false, false, true] {
             sut.setOpenWindowOnStart(value)
             sut.setNotifyOnFinish(value)
         }
         // then
-        #expect(directories == ["", "/fixture/tools", ""])
         #expect(openings == [true, false, true])
         #expect(notifications == [true, false, true])
-        #expect(defaults.string(forKey: SettingsRepositoryImpl.toolDirectoryKey) == "")
         withExtendedLifetime(subscriptions) {}
     }
 
@@ -178,5 +143,25 @@ import Testing
         #expect(!sut.notifyOnNeedsYou)
         #expect(!SettingsRepositoryImpl(defaults: defaults).notifyOnNeedsYou)
         #expect(defaults.object(forKey: "notifyOnNeedsYou") as? Bool == false)
+    }
+
+    @Test func givenSettingsAsTheProtocol_whenNeedsYouIsTurnedOff_thenItIsStoredAndPublished() {
+        // given — the repository is held as the protocol, as every production caller holds it, so a
+        // setter that is not a protocol requirement would dispatch statically to an extension default.
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let defaults = scratch.defaults
+        let sut: any SettingsRepository = SettingsRepositoryImpl(defaults: defaults)
+        var values: [Bool] = []
+        let token = sut.notifyOnNeedsYouPublisher().sink { values.append($0) }
+
+        // when
+        sut.setNotifyOnNeedsYou(false)
+
+        // then
+        #expect(sut.notifyOnNeedsYou == false)
+        #expect(values == [true, false])
+        #expect(defaults.object(forKey: SettingsRepositoryImpl.notifyOnNeedsYouKey) as? Bool == false)
+        withExtendedLifetime(token) {}
     }
 }

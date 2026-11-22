@@ -159,6 +159,7 @@ extension WorkflowMenuBarStatusVMTests {
         let visibility = FakeMonitorVisibility(mainWindowVisible: windowVisible)
         visibility.setMenuBarPopoverOpen(popoverOpen)
         let sut = WorkflowMenuBarStatusVM(useCase: MockWorkflowMenuBarUseCase(), visibility: visibility, scheduler: CapturingScheduler())
+        sut.setRuntimeReady(true)
 
         // when / then
         #expect(sut.pollInterval == expected)
@@ -171,6 +172,7 @@ extension WorkflowMenuBarStatusVMTests {
         given(useCase).runs().willProduce { calls.increment(); return [] }
         let scheduler = CapturingScheduler()
         let sut = WorkflowMenuBarStatusVM(useCase: useCase, visibility: FakeMonitorVisibility(), scheduler: scheduler)
+        sut.setRuntimeReady(true)
 
         // when
         sut.didAppear()
@@ -190,6 +192,7 @@ extension WorkflowMenuBarStatusVMTests {
         given(useCase).runs().willReturn([])
         let scheduler = CapturingScheduler()
         let sut = WorkflowMenuBarStatusVM(useCase: useCase, visibility: FakeMonitorVisibility(mainWindowVisible: false), scheduler: scheduler)
+        sut.setRuntimeReady(true)
 
         // when
         sut.didAppear()
@@ -210,6 +213,7 @@ extension WorkflowMenuBarStatusVMTests {
         let scheduler = CapturingScheduler()
         let visibility = FakeMonitorVisibility(mainWindowVisible: false)
         let sut = WorkflowMenuBarStatusVM(useCase: useCase, visibility: visibility, scheduler: scheduler)
+        sut.setRuntimeReady(true)
         sut.didAppear()
         await waitUntil { scheduler.oneShotCount(interval: 10) == 1 }
         #expect(calls.value == 1)
@@ -228,6 +232,7 @@ extension WorkflowMenuBarStatusVMTests {
         let useCase = MockWorkflowMenuBarUseCase()
         given(useCase).runs().willReturn([run("running", status: "running")])
         let sut = WorkflowMenuBarStatusVM(useCase: useCase, visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
+        sut.setRuntimeReady(true)
         await sut.refresh()
         #expect(sut.activeCount == 1)
         let changed = LockedBox(false)
@@ -254,6 +259,7 @@ extension WorkflowMenuBarStatusVMTests {
         let status = LockedBox("running")
         given(useCase).runs().willProduce { [self.run("running", status: status.value)] }
         let sut = WorkflowMenuBarStatusVM(useCase: useCase, visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
+        sut.setRuntimeReady(true)
         await sut.refresh()
         let changed = LockedBox(false)
         withObservationTracking { _ = sut.rows } onChange: { changed.mutate { $0 = true } }

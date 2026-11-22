@@ -6,7 +6,7 @@ import MonitorCore
 // MARK: - BackendsRepositoryImpl
 
 /// Fetches `harflow-ctl backends` at the refresh points Review round 1 item 1 settled on: startup
-/// (after tool discovery), a tool-directory change (`settingsChanged()`), a successful
+/// (after tool discovery), `settingsChanged()` (no production caller since the tool-directory setting was retired), a successful
 /// install/update (observed via `InstallRepository.statePublisher()` reaching `.installed`), a
 /// bounded app-activation cadence (`appDidBecomeActive()`, at most once per 60 s), and an explicit
 /// `refresh()`. Every trigger funnels into the same coalescing loop `TaskListRepositoryImpl` already

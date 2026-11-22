@@ -11,7 +11,7 @@ import SwiftEnvironment
 
 // MARK: - MenuBarViewRepository
 
-/// Concrete `MenuBarUseCase` backed by `TaskListRepository` and `EventStreamRepository`.
+/// Concrete `MenuBarUseCase` backed by `TaskListRepository`, `EventStreamRepository` and `InstallRepository`.
 @MainActor
 final class MenuBarViewRepository: MenuBarUseCase, MenuBarCountAvailabilityUseCase, MenuBarNeedsYouUseCase, @unchecked Sendable {
     
@@ -68,6 +68,14 @@ final class MenuBarViewRepository: MenuBarUseCase, MenuBarCountAvailabilityUseCa
     var connectionLine: String { taskListRepository.connectionLine }
     var countsComplete: Bool { taskListRepository.historyState.countsComplete }
     var runningCount: Int { taskListRepository.runningCount }
+    var runtimeReady: Bool { installRepository.setupState.isReady }
+    func runtimeReadyPublisher() -> AnyPublisher<Bool, Never> { Self.readiness(installRepository.setupStatePublisher()) }
+
+    /// Built in a `nonisolated static` helper because the upstream can emit off the main thread, and a
+    /// main-actor closure applied there would trap.
+    nonisolated static func readiness(_ states: AnyPublisher<RuntimeSetupState, Never>) -> AnyPublisher<Bool, Never> {
+        states.map(\.isReady).removeDuplicates().eraseToAnyPublisher()
+    }
     
     func title(_ taskID: String) -> String { taskListRepository.title(taskID) }
     

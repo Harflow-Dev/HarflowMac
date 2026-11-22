@@ -3,9 +3,8 @@ import MonitorCore
 
 // MARK: - ToolPresence
 
-/// Whether a tool binary was found at all — deliberately lower-level than SettingsFeature's
-/// `ToolResolution`, which also carries *why* a path was chosen. This only needs "found here" or
-/// "not found" to feed the install classifier.
+/// Whether a tool binary was found at all. This only needs "found here" or "not found" to feed the
+/// install classifier.
 public enum ToolPresence: Equatable, Sendable {
     case found(path: String)
     case notFound

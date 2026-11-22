@@ -13,39 +13,21 @@ import MonitorCore
 
 // MARK: - GeneralSettingsUseCase
 
-/// Provides the General settings tab's state and operations over `SettingsRepository` and
-/// `ToolEnvironmentRepository`. No `Routing` protocol: this screen has no navigation.
+/// Provides the General settings tab's behaviour toggles over `SettingsRepository`; managed-runtime
+/// and store-recovery state come through the optional `RuntimeSetupObserving` and `StoreRecoveryUseCase`
+/// conformances. No `Routing` protocol: this screen has no navigation.
 @Mockable
 @MainActor
 protocol GeneralSettingsUseCase: Sendable {
     
-    var toolDirectory: String { get }
     var openWindowOnStart: Bool { get }
     var notifyOnFinish: Bool { get }
     var notifyOnNeedsYou: Bool { get }
-    var searchDirectories: [String] { get }
-    
-    func installStatePublisher() -> AnyPublisher<InstallState, Never>
-    func retryRuntime() async
 
-    func resolve(_ tool: String) -> ToolResolution
-    
-    func toolDirectoryPublisher() -> AnyPublisher<String, Never>
     func openWindowOnStartPublisher() -> AnyPublisher<Bool, Never>
     func notifyOnFinishPublisher() -> AnyPublisher<Bool, Never>
     func notifyOnNeedsYouPublisher() -> AnyPublisher<Bool, Never>
-    
-    /// The original re-evaluated the locator's search directories and resolved paths on every
-    /// `AppModel` publish, so Settings updated once discovery (finding the `uv` tool directory)
-    /// finished. Discovery always completes before the first listing, so these three re-trigger the
-    /// same refresh here.
-    func tasksPublisher() -> AnyPublisher<[TaskInfo], Never>
-    func hasListedPublisher() -> AnyPublisher<Bool, Never>
-    func listErrorPublisher() -> AnyPublisher<ToolError?, Never>
-    
-    /// Sets the tool directory override and triggers the "changing toolDirectory refreshes the
-    /// list, nothing else reruns" behaviour (decision 11/F4-05).
-    func setToolDirectory(_ value: String)
+
     func setOpenWindowOnStart(_ value: Bool)
     func setNotifyOnFinish(_ value: Bool)
     func setNotifyOnNeedsYou(_ value: Bool)
@@ -65,12 +47,6 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
     private(set) var lastCompletedReceipt: StateRecoveryResult?
     var recoveryPresentation: StoreRecoveryPresentation { StoreRecoveryPresentation(state: recoveryState, receipt: lastCompletedReceipt) }
     @ObservationIgnored private let recoveryRouting: (any StoreRecoveryRouting)?
-    private(set) var runtimeStatus = "Preparing the managed Harflow runtime…"
-    private(set) var runtimeCanRetry = false
-    private(set) var directoryField: String = ""
-    private(set) var searchedDirectoriesText: String = ""
-    private(set) var ctlResolution: ToolResolution = .notFound
-    private(set) var setupResolution: ToolResolution = .notFound
     private(set) var openWindowOnStart: Bool
     private(set) var notifyOnFinish: Bool
     private(set) var notifyOnNeedsYou: Bool
@@ -92,13 +68,11 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
         self.openWindowOnStart = useCase.openWindowOnStart
         self.notifyOnFinish = useCase.notifyOnFinish
         self.notifyOnNeedsYou = useCase.notifyOnNeedsYou
-        refreshResolutions()
     }
     
     // MARK: - GeneralSettingsViewModel Methods
     
     func didAppear() {
-        directoryField = useCase.toolDirectory
         subscribeIfNeeded()
     }
     
@@ -106,23 +80,6 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
         (useCase as? any StoreRecoveryUseCase)?.cancelRecovery()
         cancellables.removeAll()
         didSubscribe = false
-    }
-    
-    func didTapRetryRuntime() { Task { await useCase.retryRuntime() } }
-
-    func didChangeDirectoryField(_ text: String) {
-        directoryField = text
-    }
-    
-    /// Trims whitespace before storing — the field itself keeps whatever the user typed, exactly
-    /// as the old `SettingsView.apply()` only trimmed the value handed to `AppModel.toolDirectory`.
-    func didTapApply() {
-        useCase.setToolDirectory(directoryField.trimmingCharacters(in: .whitespacesAndNewlines))
-    }
-    
-    func didTapSearchAgain() {
-        directoryField = ""
-        useCase.setToolDirectory("")
     }
     
     func didToggleOpenWindowOnStart(_ isOn: Bool) {
@@ -145,33 +102,6 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
         
         subscribeToSetupAndRecovery()
 
-        useCase.installStatePublisher()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in self?.applyRuntimeState(state) }
-            .store(in: &cancellables)
-
-        useCase.toolDirectoryPublisher()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.refreshResolutions() }
-            .store(in: &cancellables)
-        
-        // Discovery (finding the `uv` tool directory) always completes before the first listing, so
-        // any of these settling is also a signal to re-resolve (item 7).
-        useCase.tasksPublisher()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.refreshResolutions() }
-            .store(in: &cancellables)
-        
-        useCase.hasListedPublisher()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.refreshResolutions() }
-            .store(in: &cancellables)
-        
-        useCase.listErrorPublisher()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.refreshResolutions() }
-            .store(in: &cancellables)
-        
         useCase.openWindowOnStartPublisher()
             .receive(on: DispatchQueue.main)
             .weakAssign(to: \.openWindowOnStart, on: self)
@@ -188,24 +118,6 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
             .store(in: &cancellables)
     }
     
-    private func applyRuntimeState(_ state: InstallState) {
-        let status: String
-        let canRetry: Bool
-        switch state {
-        case .installed:
-            status = "Harflow runtime is ready."
-            canRetry = false
-        case .failed(_, let message):
-            status = message
-            canRetry = true
-        default:
-            status = "Preparing the managed Harflow runtime…"
-            canRetry = false
-        }
-        if runtimeStatus != status { runtimeStatus = status }
-        if runtimeCanRetry != canRetry { runtimeCanRetry = canRetry }
-    }
-
     func didTapInstallRuntime() {
         guard runtimeSetupState.actionTitle != nil, let setup = useCase as? any RuntimeSetupObserving else { return }
         Task { await setup.installRuntime() }
@@ -249,11 +161,5 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
                 }
 .store(in: &cancellables)
         }
-    }
-
-    private func refreshResolutions() {
-        searchedDirectoriesText = useCase.searchDirectories.joined(separator: ", ")
-        ctlResolution = useCase.resolve("harflow-ctl")
-        setupResolution = useCase.resolve("harflow-setup")
     }
 }

@@ -12,7 +12,7 @@ For an explicitly selected runtime, ctl/setup clients carry the selected absolut
 |---|---|
 | `Scheduling` / `SystemScheduler` | The one scheduling seam every production timer in this package uses (including public task-list observation) — injectable so tests never sleep. |
 | `AgentUsageRepository` | Shared lifetime counts for acknowledged app submissions, persisted atomically with processed task/run IDs and published as equality-deduplicated snapshots. |
-| `SettingsRepository` | `UserDefaults`-backed `toolDirectory` / `openWindowOnStart` / `notifyOnFinish` / app-wide appearance, published live. |
+| `SettingsRepository` | `UserDefaults`-backed `openWindowOnStart` / `notifyOnFinish` / `notifyOnNeedsYou` / app-wide appearance, published live. |
 | `ToolEnvironmentRepository` | Selected tooling and launch environment; managed app clients bind the exact qualified generation. |
 | `TaskArtifactRepository` | Explicit bounded pages of registered standalone-task artifact metadata; unavailable reads remain distinct from an empty manifest. |
 | `ResourceSlotsRepository` | Visibility-leased, runtime-bound resource inventory and phase status, with bounded owner metadata, retained failed-refresh evidence and generation-safe teardown. |
@@ -47,7 +47,7 @@ HARFLOW_NATIVE_BENCHMARK=1 python3 ../../../scripts/test-swift-package.py --pack
 
 `StatisticsRepository` exposes explicit public history pages. Its implementation receives tooling and state recovery through constructor injection, checks cancellation, and reports structured store refusal through the shared recovery boundary. The null repository is unavailable, not an empty history.
 
-`NeedsYouRepository` publishes one deduplicated snapshot of every request the Monitor can answer now, plus disposable `NeedsYouEvent`s for notifications. It is started once by the app shell. `NeedsYouNotifier` posts notifications with user-info keys `needs_you_item` (an item id beginning `input:`, `attention:` or `approval:`) and `needs_you_list` (`"1"` for the grouped summary); the app routes both to the Needs you screen. Approval notifications name only the tool.
+`NeedsYouRepository` publishes one deduplicated snapshot of every request the Monitor can answer now, plus disposable `NeedsYouEvent`s for notifications. It is started once by the app shell. `NeedsYouNotifier` posts notifications with the user-info key `needs_you_item` (an item id beginning `input:`, `attention:` or `approval:`); the app routes it to the Needs you screen. Approval notifications name only the tool.
 
 Workflow questions and recovery requests carry the runtime observation and epoch that produced
 the displayed request. Answer submission rejects a superseded observation, including A→B→A,

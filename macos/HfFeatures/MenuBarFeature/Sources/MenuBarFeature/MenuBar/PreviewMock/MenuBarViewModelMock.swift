@@ -22,6 +22,7 @@ final class MenuBarViewModelMock: MenuBarViewModel {
     var isConnected: Bool
     var connectionLine: String
     var runningCount: Int
+    var canStartNewSession = true
     var headerSubline: String { isConnected ? "harflow connected" : connectionLine }
     var installBannerModel: InstallBanner.Model?
     var needsYou: MenuBarNeedsYouSection?

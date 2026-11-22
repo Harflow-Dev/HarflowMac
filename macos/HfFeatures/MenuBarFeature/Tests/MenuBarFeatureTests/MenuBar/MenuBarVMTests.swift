@@ -77,12 +77,15 @@ import Testing
         let installStateBox: Box<InstallState>
         let installNeedBox: Box<InstallNeed?>
         let installDestinationBox: Box<String?>
+        let runtimeReadySubject: PassthroughSubject<Bool, Never>
+        let runtimeReadyBox: Box<Bool>
     }
 
     func makeSUT(
         connectionLine: String = "connecting…",
         runningCount: Int = 0,
         installState: InstallState = .idle,
+        runtimeReady: Bool = true,
         visibility: FakeMonitorVisibility = FakeMonitorVisibility(),
         scheduler: CapturingScheduler = CapturingScheduler()
     ) -> SUT {
@@ -104,9 +107,13 @@ import Testing
         let installStateBox = Box<InstallState>(installState)
         let installNeedBox = Box<InstallNeed?>(nil)
         let installDestinationBox = Box<String?>(nil)
+        let runtimeReadySubject = PassthroughSubject<Bool, Never>()
+        let runtimeReadyBox = Box(runtimeReady)
 
         given(useCase).connectionLine.willReturn(connectionLine)
         given(useCase).runningCount.willProduce { runningCountBox.value }
+        given(useCase).runtimeReady.willProduce { runtimeReadyBox.value }
+        given(useCase).runtimeReadyPublisher().willReturn(runtimeReadySubject.eraseToAnyPublisher())
         given(useCase).tasksPublisher().willReturn(tasksSubject.eraseToAnyPublisher())
         given(useCase).listErrorPublisher().willReturn(listErrorSubject.eraseToAnyPublisher())
         given(useCase).hasListedPublisher().willReturn(hasListedSubject.eraseToAnyPublisher())
@@ -140,7 +147,8 @@ import Testing
             titlesSubject: titlesSubject, titleBox: titleBox,
             installStateSubject: installStateSubject, lastCheckMessageSubject: lastCheckMessageSubject,
             installAnywayBlockedMessageSubject: installAnywayBlockedMessageSubject, installStateBox: installStateBox,
-            installNeedBox: installNeedBox, installDestinationBox: installDestinationBox
+            installNeedBox: installNeedBox, installDestinationBox: installDestinationBox,
+            runtimeReadySubject: runtimeReadySubject, runtimeReadyBox: runtimeReadyBox
         )
     }
     

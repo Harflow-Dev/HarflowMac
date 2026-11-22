@@ -338,9 +338,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         } else if let item = userInfo["needs_you_item"] as? String, Self.isValidNeedsYouItemID(item) {
             coordinator?.handle(path: MonitorDestination.needsYou(itemID: item))
             coordinator?.handle(path: MonitorDestination.openWindow)
-        } else if userInfo["needs_you_list"] as? String == "1" {
-            coordinator?.handle(path: MonitorDestination.needsYou(itemID: nil))
-            coordinator?.handle(path: MonitorDestination.openWindow)
         }
     }
 

@@ -359,23 +359,6 @@ import Testing
         #expect(handledPaths.value == [MonitorDestination.needsYou(itemID: "input:w1:d1").pathId, MonitorDestination.openWindow.pathId])
     }
 
-    @Test func givenANeedsYouSummaryNotification_whenClicked_thenItOpensTheList() {
-        // given
-        let (sut, _, _, _) = makeSUT()
-        let coordinator = MockCoordinator()
-        let handledPaths = LockedBox<[String]>([])
-        given(coordinator).handle(path: .any).willProduce { path in
-            if let destination = path as? MonitorDestination { handledPaths.value.append(destination.pathId) }
-        }
-        sut.coordinator = coordinator
-
-        // when
-        sut.handleNotificationClick(userInfo: ["needs_you_list": "1"])
-
-        // then
-        #expect(handledPaths.value == [MonitorDestination.needsYou(itemID: nil).pathId, MonitorDestination.openWindow.pathId])
-    }
-
     @Test(arguments: ["", "task:abc", "input:", String(repeating: "input:x", count: 60), "other:w1:d1"])
     func givenAMalformedNeedsYouID_whenClicked_thenNothingIsOpened(id: String) {
         // given

@@ -34,6 +34,10 @@ protocol MenuBarUseCase: Sendable {
 
     var connectionLine: String { get }
     var runningCount: Int { get }
+    /// Whether the managed runtime is ready (`InstallRepository.setupState.isReady`).
+    var runtimeReady: Bool { get }
+    /// Deduplicated runtime readiness. May emit off the main thread.
+    func runtimeReadyPublisher() -> AnyPublisher<Bool, Never>
     
     func title(_ taskID: String) -> String
     
@@ -119,6 +123,9 @@ final class MenuBarVM: MenuBarViewModel {
     private(set) var isConnected = false
     private(set) var connectionLine: String
     private(set) var runningCount: Int
+    /// Whether the managed runtime is ready. The new-session button is disabled and the tap ignored
+    /// while it is not, since the main window drops the request until the runtime is ready.
+    private(set) var canStartNewSession: Bool
     /// The popover header's subline: "harflow connected" while the list is healthy, else the
     /// repository's own connection line (connecting / error wording). No per-backend health claims.
     var headerSubline: String { isConnected ? "harflow connected" : connectionLine }
@@ -171,6 +178,7 @@ final class MenuBarVM: MenuBarViewModel {
         self.scheduler = scheduler
         self.connectionLine = useCase.connectionLine
         self.runningCount = useCase.runningCount
+        self.canStartNewSession = useCase.runtimeReady
         self.taskCountsLoading = !((useCase as? any MenuBarCountAvailabilityUseCase)?.countsComplete ?? true)
         self.installState = useCase.installState
         self.lastCheckMessage = useCase.lastCheckMessage
@@ -181,6 +189,8 @@ final class MenuBarVM: MenuBarViewModel {
     // MARK: - MenuBarViewModel Methods
     
     func didAppear() {
+        // Seed readiness synchronously so the workflow poll never starts against a stale default.
+        workflowStatus?.setRuntimeReady(useCase.runtimeReady)
         workflowStatus?.didAppear()
         subscribeIfNeeded()
         subscribeToNeedsYou()
@@ -256,6 +266,7 @@ final class MenuBarVM: MenuBarViewModel {
     }
     
     func didTapNewSession() {
+        guard canStartNewSession else { return }
         routing.select(.newSession)
     }
     
@@ -311,6 +322,15 @@ final class MenuBarVM: MenuBarViewModel {
                 guard let self else { return }
                 latestTasks = tasks
                 recompute()
+            }
+            .store(in: &cancellables)
+
+        useCase.runtimeReadyPublisher()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] ready in
+                guard let self else { return }
+                if canStartNewSession != ready { canStartNewSession = ready }
+                workflowStatus?.setRuntimeReady(ready)
             }
             .store(in: &cancellables)
 
@@ -510,20 +530,6 @@ extension MenuBarVM {
         }
     }
 
-    private static func runningTitle(_ stage: InstallStage) -> String {
-        if case .validate = stage { return "Checking…" }
-        return "Preparing Harflow runtime…"
-    }
-
-    private static func runningDetail(_ stage: InstallStage) -> String {
-        switch stage {
-        case .git: "Checking for git…"
-        case .uv: "Setting up uv…"
-        case .harflow: "Preparing the exact paired runtime. This can take a few minutes."
-        case .validate: "Checking the new install. This can take a little while."
-        }
-    }
-
     private func destinationLine() -> String {
         if let destination = useCase.installDestination() { "\n\nInstalls into \(destination)." } else {
             "\n\nInstalls into uv's tool folder, once uv is found."
@@ -572,22 +578,5 @@ extension MenuBarVM {
     private func confirmInstallAnyway() {
         guard Self.stateAllowsInstallAnyway(installState) else { return }
         Task { [weak self] in await self?.useCase.installAnyway() }
-    }
-
-    private static func stateAllowsInstall(_ state: InstallState) -> Bool {
-        switch state {
-        case .idle, .failed, .needsGit, .needsUv, .installed: true
-        case .running, .unresolved: false
-        }
-    }
-
-    private static func stateAllowsInstallUv(_ state: InstallState) -> Bool {
-        if case .needsUv = state { return true }
-        return false
-    }
-
-    private static func stateAllowsInstallAnyway(_ state: InstallState) -> Bool {
-        if case .unresolved = state { return true }
-        return false
     }
 }

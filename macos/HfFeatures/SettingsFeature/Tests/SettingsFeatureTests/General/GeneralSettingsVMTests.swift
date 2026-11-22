@@ -3,221 +3,38 @@ import Foundation
 import HfRepository
 import HfTestUtilities
 import Mockable
-import MonitorCore
 @testable import SettingsFeature
 import Testing
 
-/// A plain mutable box, read by a `willProduce` closure registered exactly once. `Mockable`'s
-/// `given` keeps a FIFO queue per member and only retires an entry once a *later* one has been
-/// registered — a second `given(...).willReturn(...)` call on the same member does not reliably
-/// "replace" the first for the very next invocation (documented in the Phase 3 report and
-/// `HfRepositoryTests`' own notes on this exact pitfall). Mutating a box read by one `willProduce`
-/// avoids it entirely. No locking: everything here runs on the main actor.
-private final class Box<Value> {
-    var value: Value
-    init(_ value: Value) { self.value = value }
-}
-
 @MainActor
 @Suite struct GeneralSettingsVMTests {
-    
+
     private struct SUT {
         let sut: GeneralSettingsVM
         let useCase: MockGeneralSettingsUseCase
-        let toolDirectorySubject: PassthroughSubject<String, Never>
         let openWindowSubject: PassthroughSubject<Bool, Never>
         let notifySubject: PassthroughSubject<Bool, Never>
-        let ctlResolutionBox: Box<ToolResolution>
-        let tasksSubject: PassthroughSubject<[TaskInfo], Never>
-        let hasListedSubject: PassthroughSubject<Bool, Never>
-        let listErrorSubject: PassthroughSubject<ToolError?, Never>
-        let installStateSubject: PassthroughSubject<InstallState, Never>
-        let retryCount: Box<Int>
     }
-    
-    private func makeSUT(
-        toolDirectory: String = "",
-        openWindowOnStart: Bool = true,
-        notifyOnFinish: Bool = true,
-        searchDirectories: [String] = ["/opt/homebrew/bin", "/usr/local/bin"],
-        ctlResolution: ToolResolution = .found(path: "/opt/homebrew/bin/harflow-ctl"),
-        setupResolution: ToolResolution = .notFound
-    ) -> SUT {
+
+    private func makeSUT(openWindowOnStart: Bool = true, notifyOnFinish: Bool = true) -> SUT {
         let useCase = MockGeneralSettingsUseCase()
-        let toolDirectorySubject = PassthroughSubject<String, Never>()
         let openWindowSubject = PassthroughSubject<Bool, Never>()
         let notifySubject = PassthroughSubject<Bool, Never>()
-        let ctlResolutionBox = Box(ctlResolution)
-        let tasksSubject = PassthroughSubject<[TaskInfo], Never>()
-        let hasListedSubject = PassthroughSubject<Bool, Never>()
-        let listErrorSubject = PassthroughSubject<ToolError?, Never>()
-        let installStateSubject = PassthroughSubject<InstallState, Never>()
-        let retryCount = Box(0)
-        
-        given(useCase).toolDirectory.willReturn(toolDirectory)
+
         given(useCase).openWindowOnStart.willReturn(openWindowOnStart)
         given(useCase).notifyOnFinish.willReturn(notifyOnFinish)
         given(useCase).notifyOnNeedsYou.willReturn(true)
         given(useCase).notifyOnNeedsYouPublisher().willReturn(Just(true).eraseToAnyPublisher())
         given(useCase).setNotifyOnNeedsYou(.any).willReturn()
-        given(useCase).searchDirectories.willReturn(searchDirectories)
-        given(useCase).resolve(.value("harflow-ctl")).willProduce { _ in ctlResolutionBox.value }
-        given(useCase).resolve(.value("harflow-setup")).willReturn(setupResolution)
-        given(useCase).toolDirectoryPublisher().willReturn(toolDirectorySubject.eraseToAnyPublisher())
         given(useCase).openWindowOnStartPublisher().willReturn(openWindowSubject.eraseToAnyPublisher())
         given(useCase).notifyOnFinishPublisher().willReturn(notifySubject.eraseToAnyPublisher())
-        given(useCase).tasksPublisher().willReturn(tasksSubject.eraseToAnyPublisher())
-        given(useCase).hasListedPublisher().willReturn(hasListedSubject.eraseToAnyPublisher())
-        given(useCase).listErrorPublisher().willReturn(listErrorSubject.eraseToAnyPublisher())
-        given(useCase).installStatePublisher().willReturn(installStateSubject.eraseToAnyPublisher())
-        given(useCase).retryRuntime().willProduce { retryCount.value += 1 }
-        given(useCase).setToolDirectory(.any).willReturn()
         given(useCase).setOpenWindowOnStart(.any).willReturn()
         given(useCase).setNotifyOnFinish(.any).willReturn()
-        
+
         let sut = GeneralSettingsVM(useCase: useCase)
-        return SUT(
-            sut: sut, useCase: useCase, toolDirectorySubject: toolDirectorySubject, openWindowSubject: openWindowSubject,
-            notifySubject: notifySubject, ctlResolutionBox: ctlResolutionBox, tasksSubject: tasksSubject,
-            hasListedSubject: hasListedSubject, listErrorSubject: listErrorSubject,
-            installStateSubject: installStateSubject, retryCount: retryCount
-        )
-    }
-    
-    @Test func givenAnExistingToolDirectory_whenTheViewAppears_thenTheFieldLoadsTheCommittedValue() {
-        // given
-        let harness = makeSUT(toolDirectory: "/opt/homebrew/bin")
-        let sut = harness.sut
-        
-        // when
-        sut.didAppear()
-        
-        // then
-        #expect(sut.directoryField == "/opt/homebrew/bin")
+        return SUT(sut: sut, useCase: useCase, openWindowSubject: openWindowSubject, notifySubject: notifySubject)
     }
 
-    @Test func givenManagedRuntimeFailure_whenPublished_thenStatusShowsTheFailureAndEnablesRetry() async {
-        // given
-        let harness = makeSUT()
-        let sut = harness.sut
-        sut.didAppear()
-
-        // when
-        harness.installStateSubject.send(.failed(stage: .harflow, message: "fixture runtime failure"))
-        await waitUntil { sut.runtimeStatus == "fixture runtime failure" }
-
-        // then
-        #expect(sut.runtimeStatus == "fixture runtime failure")
-        #expect(sut.runtimeCanRetry)
-    }
-
-    @Test func givenManagedRuntimeFailure_whenRetryIsTapped_thenTheUseCaseReceivesOneRetry() async {
-        // given
-        let harness = makeSUT()
-        let sut = harness.sut
-
-        // when
-        sut.didTapRetryRuntime()
-        await waitUntil { harness.retryCount.value == 1 }
-
-        // then
-        #expect(harness.retryCount.value == 1)
-    }
-    
-    @Test func givenWhitespacePaddedInput_whenApplied_thenItIsTrimmedBeforeStoring() {
-        // given
-        let harness = makeSUT()
-        let sut = harness.sut
-        let useCase = harness.useCase
-        sut.didChangeDirectoryField("  /opt/homebrew/bin  ")
-        
-        // when
-        sut.didTapApply()
-        
-        // then
-        verify(useCase).setToolDirectory(.value("/opt/homebrew/bin")).called(1)
-        // The field itself keeps what the user typed — only the stored value is trimmed, matching
-        // the old `SettingsView.apply()`.
-        #expect(sut.directoryField == "  /opt/homebrew/bin  ")
-    }
-    
-    @Test func givenSearchAgain_whenTapped_thenTheOverrideClearsAndPathsReResolve() async {
-        // given
-        let harness = makeSUT(ctlResolution: .found(path: "/opt/homebrew/bin/harflow-ctl"))
-        let sut = harness.sut
-        let useCase = harness.useCase
-        let toolDirectorySubject = harness.toolDirectorySubject
-        let ctlResolutionBox = harness.ctlResolutionBox
-        sut.didAppear()
-        sut.didChangeDirectoryField("/some/stale/path")
-        ctlResolutionBox.value = .found(path: "/usr/local/bin/harflow-ctl")
-        
-        // when
-        sut.didTapSearchAgain()
-        
-        // then
-        #expect(sut.directoryField == "")
-        verify(useCase).setToolDirectory(.value("")).called(1)
-        // The resolved paths update immediately once the setting change is observed (decision 11).
-        // `publisher.send` here mirrors what a real `SettingsRepository` does after `setToolDirectory`
-        // republishes — `weakAssign`/`.sink` deliver via `.receive(on: DispatchQueue.main)`, so the
-        // assertion must wait for that hop rather than read the property synchronously.
-        toolDirectorySubject.send("")
-        await waitUntil { sut.ctlResolution == .found(path: "/usr/local/bin/harflow-ctl") }
-        #expect(sut.ctlResolution == .found(path: "/usr/local/bin/harflow-ctl"))
-    }
-    
-    // Regression (item 7): the original re-evaluated `searchDirectories`/`resolve(_:)` on every
-    // `AppModel` publish, so Settings updated once discovery (finding the `uv` tool directory)
-    // finished — discovery always completes before the first listing. Neither `hasListed` nor
-    // `tasks`/`listError` used to trigger a re-resolve here at all.
-    @Test func givenDiscoveryFinishesAfterTheViewAppeared_whenTheTaskListSettles_thenResolutionsRefresh() async {
-        // given
-        let harness = makeSUT(ctlResolution: .notFound)
-        let sut = harness.sut
-        let ctlResolutionBox = harness.ctlResolutionBox
-        let tasksSubject = harness.tasksSubject
-        let hasListedSubject = harness.hasListedSubject
-        let listErrorSubject = harness.listErrorSubject
-        sut.didAppear()
-        #expect(sut.ctlResolution == .notFound)
-        
-        // when — discovery settles (the `uv` tool directory is found) and the first listing
-        // completes; nothing here is a `toolDirectory` change.
-        ctlResolutionBox.value = .found(path: "/opt/homebrew/bin/harflow-ctl")
-        hasListedSubject.send(true)
-        
-        // then
-        await waitUntil { sut.ctlResolution == .found(path: "/opt/homebrew/bin/harflow-ctl") }
-        #expect(sut.ctlResolution == .found(path: "/opt/homebrew/bin/harflow-ctl"))
-        
-        // when — a later `tasksPublisher`/`listErrorPublisher` emission also re-resolves.
-        ctlResolutionBox.value = .notFound
-        tasksSubject.send([])
-        await waitUntil { sut.ctlResolution == .notFound }
-        #expect(sut.ctlResolution == .notFound)
-        
-        ctlResolutionBox.value = .found(path: "/usr/local/bin/harflow-ctl")
-        listErrorSubject.send(nil)
-        await waitUntil { sut.ctlResolution == .found(path: "/usr/local/bin/harflow-ctl") }
-        #expect(sut.ctlResolution == .found(path: "/usr/local/bin/harflow-ctl"))
-    }
-    
-    @Test func givenAToolDirectoryChangeIsObserved_whenNotApplied_thenTheDirectoryFieldIsUntouched() {
-        // given — a live settings change from elsewhere must never clobber what the user is typing.
-        let harness = makeSUT()
-        let sut = harness.sut
-        let toolDirectorySubject = harness.toolDirectorySubject
-        sut.didAppear()
-        sut.didChangeDirectoryField("still typing")
-        
-        // when
-        toolDirectorySubject.send("/opt/homebrew/bin")
-        
-        // then
-        #expect(sut.directoryField == "still typing")
-    }
-    
     @Test func givenToggleActions_whenInvoked_thenTheyForwardToTheUseCase() {
         // given
         let harness = makeSUT()

@@ -9,8 +9,7 @@ import HfUtilities
 /// every subscriber sees the same live value the moment any writer sets it.
 public final class SettingsRepositoryImpl: SettingsRepository, @unchecked Sendable {
 
-    /// Exact key names from `AppModel.swift:21-23` — never renamed.
-    public static let toolDirectoryKey = "toolDirectory"
+    /// Exact key names — never renamed. The retired `toolDirectory` value is left in the user's defaults.
     public static let openWindowOnStartKey = "openWindowOnStart"
     public static let notifyOnFinishKey = "notifyOnFinish"
     public static let notifyOnNeedsYouKey = "notifyOnNeedsYou"
@@ -18,7 +17,6 @@ public final class SettingsRepositoryImpl: SettingsRepository, @unchecked Sendab
 
     private let defaults: UserDefaults
 
-    @Subjected private var toolDirectoryValue: String
     @Subjected private var openWindowOnStartValue: Bool
     @Subjected private var notifyOnFinishValue: Bool
     @Subjected private var notifyOnNeedsYouValue: Bool
@@ -30,34 +28,25 @@ public final class SettingsRepositoryImpl: SettingsRepository, @unchecked Sendab
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         defaults.register(defaults: [
-            Self.toolDirectoryKey: "",
             Self.openWindowOnStartKey: true,
             Self.notifyOnFinishKey: true,
             Self.notifyOnNeedsYouKey: true
         ])
-        _toolDirectoryValue = Subjected(wrappedValue: defaults.string(forKey: Self.toolDirectoryKey) ?? "")
         _openWindowOnStartValue = Subjected(wrappedValue: defaults.object(forKey: Self.openWindowOnStartKey) as? Bool ?? true)
         _notifyOnFinishValue = Subjected(wrappedValue: defaults.object(forKey: Self.notifyOnFinishKey) as? Bool ?? true)
         _notifyOnNeedsYouValue = Subjected(wrappedValue: defaults.object(forKey: Self.notifyOnNeedsYouKey) as? Bool ?? true)
         _appAppearanceValue = Subjected(wrappedValue: defaults.string(forKey: Self.appAppearanceKey).flatMap(AppAppearance.init(rawValue:)) ?? .system)
     }
 
-    public var toolDirectory: String { toolDirectoryValue }
     public var openWindowOnStart: Bool { openWindowOnStartValue }
     public var notifyOnFinish: Bool { notifyOnFinishValue }
     public var notifyOnNeedsYou: Bool { notifyOnNeedsYouValue }
     public var appAppearance: AppAppearance { appAppearanceValue }
 
-    public func toolDirectoryPublisher() -> AnyPublisher<String, Never> { $toolDirectoryValue.removeDuplicates().eraseToAnyPublisher() }
     public func openWindowOnStartPublisher() -> AnyPublisher<Bool, Never> { $openWindowOnStartValue.removeDuplicates().eraseToAnyPublisher() }
     public func notifyOnFinishPublisher() -> AnyPublisher<Bool, Never> { $notifyOnFinishValue.removeDuplicates().eraseToAnyPublisher() }
     public func notifyOnNeedsYouPublisher() -> AnyPublisher<Bool, Never> { $notifyOnNeedsYouValue.removeDuplicates().eraseToAnyPublisher() }
     public func appAppearancePublisher() -> AnyPublisher<AppAppearance, Never> { $appAppearanceValue.removeDuplicates().eraseToAnyPublisher() }
-
-    public func setToolDirectory(_ value: String) {
-        defaults.set(value, forKey: Self.toolDirectoryKey)
-        toolDirectoryValue = value
-    }
 
     public func setOpenWindowOnStart(_ value: Bool) {
         defaults.set(value, forKey: Self.openWindowOnStartKey)

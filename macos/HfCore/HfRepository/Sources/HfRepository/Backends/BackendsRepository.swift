@@ -149,7 +149,7 @@ public protocol BackendsRepository: Sendable {
     /// concurrently.
     func refresh() async
 
-    /// Called after `SettingsRepository.setToolDirectory` — triggers a refresh only.
+    /// Triggers a refresh only. It has no production caller since the tool-directory setting was retired.
     func settingsChanged()
 
     /// Called on `NSApplication.didBecomeActiveNotification` — internally bounded to at most once

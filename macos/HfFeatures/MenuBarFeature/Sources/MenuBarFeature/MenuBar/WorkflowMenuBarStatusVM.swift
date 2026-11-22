@@ -48,12 +48,17 @@ struct WorkflowMenuBarRow: Identifiable, Equatable {
 
 /// Always-visible status-item state. The label owns its polling lifetime; closing the popover
 /// does not stop workflow status from updating. No workflow task event leases are acquired here.
+///
+/// The poll runs only while the label is appeared **and** the managed runtime is ready: `MenuBarVM`
+/// feeds readiness through `setRuntimeReady(_:)`. The VM starts not ready, so nothing is polled until
+/// a readiness value arrives. Losing readiness cancels the poll and clears rows, counts and the error,
+/// since stale workflow rows are worse than none.
 @Observable
 @MainActor
 final class WorkflowMenuBarStatusVM: ViewModel {
     private(set) var rows: [WorkflowMenuBarRow] = []
     private(set) var errorText: String?
-    private(set) var countsLoading = true
+    private(set) var countsLoading = false
     private var catalogActiveCount: Int?
     private var catalogAttentionCount: Int?
     var activeCount: Int { catalogActiveCount ?? (countsLoading ? 0 : rows.filter(\.isActive).count) }
@@ -69,6 +74,8 @@ final class WorkflowMenuBarStatusVM: ViewModel {
     @ObservationIgnored private var poll: Task<Void, Never>?
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var visibilityWake: AnyCancellable?
+    @ObservationIgnored private var isAppeared = false
+    @ObservationIgnored private var isRuntimeReady = false
 
     init(useCase: any WorkflowMenuBarUseCase, visibility: any MonitorVisibility, scheduler: any Scheduling) {
         self.useCase = useCase
@@ -83,10 +90,9 @@ final class WorkflowMenuBarStatusVM: ViewModel {
     }
 
     func didAppear() {
-        guard poll == nil else { return }
-        let token = UUID()
-        generation = token
-        startPoll(token)
+        guard !isAppeared else { return }
+        isAppeared = true
+        startPollIfReady()
         // The poll stretches to 10 s while nothing is visible; the moment the popover opens or the
         // main window shows, cut any pending wait short and refresh at once.
         visibilityWake = visibility.mainWindowVisiblePublisher()
@@ -97,10 +103,42 @@ final class WorkflowMenuBarStatusVM: ViewModel {
             .filter(\.self)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                guard let self, poll != nil else { return }
+                guard let self, isAppeared, isRuntimeReady, poll != nil else { return }
                 poll?.cancel()
                 startPoll(generation)
             }
+    }
+
+    func didDisappear() {
+        isAppeared = false
+        generation = UUID()
+        visibilityWake = nil
+        poll?.cancel()
+        poll = nil
+    }
+
+    /// Applies the managed runtime's readiness. An unchanged value is ignored. Becoming ready marks
+    /// the counts as loading and, while appeared, polls at once; losing readiness cancels the poll,
+    /// discards any result still in flight and clears everything the poll produced.
+    func setRuntimeReady(_ ready: Bool) {
+        guard ready != isRuntimeReady else { return }
+        isRuntimeReady = ready
+        generation = UUID()
+        poll?.cancel()
+        poll = nil
+        if ready {
+            countsLoading = true
+            startPollIfReady()
+        } else {
+            clearPublishedState()
+        }
+    }
+
+    private func startPollIfReady() {
+        guard isAppeared, isRuntimeReady, poll == nil else { return }
+        let token = UUID()
+        generation = token
+        startPoll(token)
     }
 
     private func startPoll(_ token: UUID) {
@@ -113,14 +151,16 @@ final class WorkflowMenuBarStatusVM: ViewModel {
         }
     }
 
-    func didDisappear() {
-        generation = UUID()
-        visibilityWake = nil
-        poll?.cancel()
-        poll = nil
+    private func clearPublishedState() {
+        if !rows.isEmpty { rows = [] }
+        if catalogActiveCount != nil { catalogActiveCount = nil }
+        if catalogAttentionCount != nil { catalogAttentionCount = nil }
+        if errorText != nil { errorText = nil }
+        if countsLoading { countsLoading = false }
     }
 
     func refresh(generation token: UUID? = nil) async {
+        guard isRuntimeReady else { return }
         do {
             let result: [[String: JSONValue]]
             var activeCount: Int?
@@ -133,7 +173,7 @@ final class WorkflowMenuBarStatusVM: ViewModel {
                 attentionCount = !loadingCounts ? page.totalAttentionRootCount : catalogAttentionCount
                 result = page.items + page.relatedHeaders
             } else { result = try await useCase.runs(); loadingCounts = false }
-            guard !Task.isCancelled, token == nil || token == generation else { return }
+            guard !Task.isCancelled, isRuntimeReady, token == nil || token == generation else { return }
             let mapped = result.compactMap(WorkflowMenuBarRow.init)
             // A child is part of its owning workflow tree, not another badge item.
             let known = Set(mapped.map(\.id))
@@ -147,7 +187,7 @@ final class WorkflowMenuBarStatusVM: ViewModel {
             }
             apply(rows: nextRows, loadingCounts: loadingCounts, activeCount: activeCount, attentionCount: attentionCount)
         } catch {
-            guard !Task.isCancelled, token == nil || token == generation else { return }
+            guard !Task.isCancelled, isRuntimeReady, token == nil || token == generation else { return }
             // Keep agent monitoring usable with older CLI installations.
             if errorText != "Workflow status unavailable" { errorText = "Workflow status unavailable" }
         }

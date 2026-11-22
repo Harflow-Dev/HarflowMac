@@ -46,6 +46,8 @@ import Testing
         let routing = MockMenuBarRouting()
         given(useCase).connectionLine.willReturn("connected")
         given(useCase).runningCount.willReturn(0)
+        given(useCase).runtimeReady.willReturn(true)
+        given(useCase).runtimeReadyPublisher().willReturn(Just(true).eraseToAnyPublisher())
         given(useCase).installState.willReturn(.idle)
         given(useCase).lastCheckMessage.willReturn(nil)
         given(useCase).installAnywayBlockedMessage.willReturn(nil)

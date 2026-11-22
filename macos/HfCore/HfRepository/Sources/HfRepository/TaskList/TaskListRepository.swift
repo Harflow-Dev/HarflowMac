@@ -53,8 +53,8 @@ public protocol TaskListRepository: Sendable {
     /// barrier, so a validated install only reports success once the listing has actually refreshed.
     func refreshAndWait() async -> Result<Void, ToolError>
 
-    /// Called by the Settings screen after `SettingsRepository.setToolDirectory` — triggers a
-    /// refresh only; the login-PATH/`uv` probes never rerun (F4-05).
+    /// No production caller since the tool-directory setting was retired; the protocol-extension default
+    /// of `runtimeBecameReady()` still routes to it for conformers that don't override it.
     func settingsChanged()
     /// Rechecks readiness and restarts observation without discarding recovery receipts.
     func runtimeBecameReady()

@@ -2,8 +2,8 @@
 //  GeneralSettingsView.swift
 //  SettingsFeature
 //
-//  General settings for application behavior and managed runtime availability.
-//  Runtime selection is managed by the application.
+//  General settings: managed runtime status, task-store recovery and behaviour toggles.
+//  Runtime selection is managed by the application; there is no tool-directory control.
 //
 
 import Foundation
@@ -12,23 +12,12 @@ import HfRepository
 import HfUI
 import SwiftUI
 
-// MARK: - ToolResolution
-
-/// Whether a required binary (`harflow-ctl`/`harflow-setup`) was found, and where.
-public enum ToolResolution: Equatable, Sendable {
-    case found(path: String)
-    case notFound
-}
-
 // MARK: - GeneralSettingsViewModel
 
 /// View model protocol for the General settings tab.
 @MainActor
 protocol GeneralSettingsViewModel: ViewModel {
 
-    /// The text field's live value — loaded from the committed setting on `didAppear`, then edited
-    /// locally until `didTapApply`/`didTapSearchAgain` commits it. Never overwritten by a live
-    /// settings update from elsewhere, matching the old `SettingsView`'s local `@State`.
     var runtimeSetupState: RuntimeSetupState { get }
     var recoveryPresentation: StoreRecoveryPresentation { get }
     func didTapInstallRuntime()
@@ -37,23 +26,12 @@ protocol GeneralSettingsViewModel: ViewModel {
     func didTapCancelRecovery()
     func didTapConfirmRecovery()
     func didTapRevealBackup()
-    var runtimeStatus: String { get }
-    var runtimeCanRetry: Bool { get }
-    func didTapRetryRuntime()
-
-    var directoryField: String { get }
-    var searchedDirectoriesText: String { get }
-    var ctlResolution: ToolResolution { get }
-    var setupResolution: ToolResolution { get }
     var openWindowOnStart: Bool { get }
     var notifyOnFinish: Bool { get }
     var notifyOnNeedsYou: Bool { get }
 
     func didAppear()
     func didDisappear()
-    func didChangeDirectoryField(_ text: String)
-    func didTapApply()
-    func didTapSearchAgain()
     func didToggleOpenWindowOnStart(_ isOn: Bool)
     func didToggleNotifyOnFinish(_ isOn: Bool)
     func didToggleNotifyOnNeedsYou(_ isOn: Bool)
@@ -141,16 +119,5 @@ struct GeneralSettingsView<VM: GeneralSettingsViewModel>: View {
 
 #Preview("General - dark") {
     GeneralSettingsView(GeneralSettingsViewModelMock()).preferredColorScheme(.dark)
-}
-
-/// Both tools missing: the not-found glyph treatment, still no invented values.
-#Preview("General, tools missing - light") {
-    GeneralSettingsView(GeneralSettingsViewModelMock(ctlResolution: .notFound, setupResolution: .notFound))
-        .preferredColorScheme(.light)
-}
-
-#Preview("General, tools missing - dark") {
-    GeneralSettingsView(GeneralSettingsViewModelMock(ctlResolution: .notFound, setupResolution: .notFound))
-        .preferredColorScheme(.dark)
 }
 #endif

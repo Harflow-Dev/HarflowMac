@@ -38,6 +38,8 @@ protocol MenuBarViewModel: ViewModel {
     var isConnected: Bool { get }
     var connectionLine: String { get }
     var runningCount: Int { get }
+    /// Whether the managed runtime is ready, so a new session can be started.
+    var canStartNewSession: Bool { get }
     var taskCountsLoading: Bool { get }
     var workflowCountsLoading: Bool { get }
     var workflowRows: [WorkflowMenuBarRow] { get }
@@ -199,13 +201,14 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
             Button { viewModel.didTapNewSession() } label: {
                 Image(systemName: "plus")
                     .font(.hf(.body, weight: .semibold))
-                    .foregroundStyle(Color.accentLink)
+                    .foregroundStyle(viewModel.canStartNewSession ? Color.accentLink : Color.secondaryText)
                     .frame(width: HfRadius.Metrics.primaryButtonHeight, height: HfRadius.Metrics.primaryButtonHeight)
                     .background(Circle().fill(Color.cardFill))
                     .overlay(Circle().stroke(Color.hairline, lineWidth: HfRadius.Metrics.hairlineStroke))
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
+            .disabled(!viewModel.canStartNewSession)
             .help("New session")
             .accessibilityLabel("New session")
         }
@@ -425,6 +428,7 @@ private final class MenuBarPreviewModel: MenuBarViewModel {
     var isConnected = true
     var connectionLine = "connected · harflow-ctl"
     var runningCount = 0
+    var canStartNewSession = true
     var taskCountsLoading = false
     var workflowCountsLoading = false
     var workflowRows: [WorkflowMenuBarRow] = []

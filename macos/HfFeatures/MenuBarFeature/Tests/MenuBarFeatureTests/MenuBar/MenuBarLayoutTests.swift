@@ -397,6 +397,7 @@ import Testing
     var isConnected = true
     var connectionLine = "connected · harflow-ctl"
     var runningCount: Int
+    var canStartNewSession = true
     var taskCountsLoading: Bool
     var workflowCountsLoading: Bool
     var workflowRows: [WorkflowMenuBarRow] = []
