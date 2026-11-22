@@ -84,3 +84,88 @@ suites. The HfRepository check passed 17 definitions.
 Both scoped checks used fixture data via the guarded runner and shared build
 lane. No live engine was invoked. Native steering presentation and keyboard
 checks follow in the UI slice.
+
+## Aggregate gate
+
+The gate ran on `8c595397` with the guarded runner, through the shared build lane, under UID 503 with Keyboard
+Navigation on. Evidence is under `.claude-work/mac/stage3/run-stage3-gate-1/`.
+
+- **Passed:** both repository guards, the swiftformat lint, pytest, and the aggregate runs of HfCommon, HfUI,
+  HfUtilities, HfRepository, MonitorCore, MenuBarFeature, SettingsFeature and the Harflow shell.
+- **Strict lint:** one violation, cyclomatic complexity at `TaskDetailVM+ChangesText.swift:77`, from `afcf9b8e`.
+- **MainWindowFeature:** 423 of 430 suites passed. A solo rerun failed the same 7 suites identically.
+
+### Resolution of the seven failures
+
+- **Stale after the running composer (`a78b1c49`):**
+  - M05ActionsTopBar, M05Pane and M05Status looked for a "Stop" control and expected "Send" while running.
+  - The standalone slot now shows "Stop task", or "Stopping…" while stopping, as HarflowDesign `5539168` (record
+    `8312376`) draws for `task/running-composer-empty`/`-draft`.
+  - The matrices now find the slot by identifier. The `M05StateTable` entries record a deviation for the states the
+    design did not redraw (`running-stop`, `stop-requested`, `owner-lost`, `unverified`, `continue-started`,
+    `pane-running-closed`, `stop-dialog*`). Those drawings show the legacy bordered stop control, so the slot there is
+    a native generalisation by `a78b1c49`, pending the owner's visual pass.
+  - The vacuous `!has("Stop")` checks now also assert the absence of "Stop task", or a positive "Send" slot.
+- **Stale after the inline Events usage group (`8839cf74`):** TaskPaneHostedTests' Events document was too short to
+  restore its offset. Conversation A now has 40 observation records, and both mounts assert a scroll range of at least
+  220 pt.
+- **Stale after the message-admission gate (`ecc3e7a8`):** WorkflowActivityComposerHostedTests never subscribed, so
+  every send was refused. The test now subscribes, awaits the sidebar, and asserts the admission preconditions.
+- **Stale after the inspector document (`ae337f06`):** WorkflowRedesignLayoutTests looked for the removed call-list
+  container. It now scopes the call-selector buttons to their shared document scroll view, checks the order and a
+  single CALLS heading, and confirms that no scroll view is nested inside that document. The default run sidebar stays
+  mounted at opacity 0 underneath, so window-wide geometry is not used.
+- **Product regression: WorkflowStandaloneHostedTests.**
+  - `ae337f06` routes the orchestrator through a measured layout. Its switch to retained steering replaces the
+    `WorkflowSelectedActivityView`. The replaced view's zeroing `onDisappear` (from `054713ab`) could then arrive after
+    the new view had measured, emptying the activity column.
+  - `ParallelVM` now owns the inspector viewport through claims, using `ParallelViewportClaims`:
+    - the newest live view that has measured a width wins;
+    - a released view can return only through `onAppear`, with its last geometry, and its later reports are ignored;
+    - while live views exist but none has measured, the width is held;
+    - suspension and disappearance reset the live claims.
+  - The lane path is unchanged.
+  - Unit tests failed first against the earlier claim model, then passed.
+  - The hosted suite, including a repeated layout-switch test, passed in four consecutive guarded runs.
+
+Strict lint is clean after `reconcileChangesSelection` was split into a behaviour-preserving helper, with per-branch
+tests. More → Stop is now covered: a generic `TaskDetailView.toolbarActions` factory, the only construction site in
+the view, binds `cancel` to `didTapCancel`. Binding tests cover standalone and group chrome.
+
+Reviews used Opus and Fable; Astra was paused by the owner from 2026-11-22 because of its usage limit. The plans and
+the code were reviewed adversarially in two rounds each, and every finding is recorded in `.claude-work/mac/stage3/`
+(`gate-red-fixes-plan.md`, `STATUS.md`).
+
+### Closing MainWindowFeature run
+
+On the candidate committed as `efcf95ab`, the full MainWindowFeature `--mode suites` run passed 432 of 432
+suites under the lane (`run-gate-red-hosted-4/`). Its fingerprint before and after matched the working tree. The
+focused hosted reruns in `run-gate-red-hosted-1` to `-3` resolved the remaining test-only scoping issues along the
+way. The other packages' aggregates from the first gate run are unaffected: the fix commit touches only
+MainWindowFeature.
+
+### Open items
+
+- **Owner visual pass:**
+  - the trailing "Stop task" next to the banner Stop in `owner-lost`/`unverified`;
+  - the popover re-anchoring when the repository pill changes width;
+  - the focused toolbar chip's ring.
+- **Deferred to their own slices:**
+  - Events toolbar pointer reveal, focus return and minimal reveal scrolling;
+  - Inline Changes: clipboard transfer, multiple open diffs and manual continuation;
+  - Statistics: Agent time, Tasks per day, By harness, the Tasks-ranking resume rows, and the additive engine field
+    (`spawned_by`/`root_task_id` plus an active-successor flag).
+- **Known limitations:**
+  - **Coverage gaps:** the composer's Cancel and Escape checks use a shell-equivalent sheet binding, not the full
+    `MainWindowNavigationView`. The bordered `task-composer.stop` branch is no longer reachable from a view model.
+  - **Events reading position:** a long Result can clamp the Events reading position before its markdown parse lands
+    (since `8839cf74`).
+  - **Inspector viewport claims:**
+    - a leaked live viewport token holds width and leases until suspension;
+    - a released token evicted from the 16-entry list could revive through a late report;
+    - a teardown width of 0 from an outgoing view briefly drops the column before the next view measures.
+  - **Test weaknesses:**
+    - `WorkflowActivityMessageTests.swift:114-123` can be refused by admission rather than its disabled reason;
+    - the reconcile tests infer cancellation through the patch-generation fence;
+    - the group toolbar contrast checks only the dialog title.
+- VoiceOver remains deferred to M12.
