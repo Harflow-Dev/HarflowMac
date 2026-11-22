@@ -49,4 +49,36 @@ import Testing
             try fixture.capturePNG(to: directory.appendingPathComponent("orchestrator-\(mode)-\(scheme).png"))
         }
     }
+
+    /// The inspector view is replaced in place when the retained-steering layout takes over from the measured one. Each
+    /// replacement must leave the orchestrator column resident and leased, whichever of the old view's disappearance and
+    /// the new view's width report arrives first.
+    @Test func givenOrchestratorActivity_whenRetainedSteeringLayoutIsEnteredRepeatedly_thenColumnStaysResidentAndLeased() async throws {
+        // given
+        let vm = WorkflowOnDemandPreview.make(run: true, orchestrator: true, status: "running")
+        let tests = ParallelVMTests()
+        let harness = tests.makeSUT()
+        let task = tests.task(id: "decision-task", status: "running")
+        harness.tasksBox.value[task.taskID] = task
+        harness.itemsBox.value[task.taskID] = [PreviewFixtures.textItem("Orchestrator decision activity")]
+        harness.availabilityBox.value[task.taskID] = .available
+        vm.parallel = harness.sut
+        vm.selectedNodeID = nil
+        await vm.sidebarTask?.value
+        let fixture = RedesignHost(WorkflowView(vm).environment(\.hfReduceMotionOverride, true), size: CGSize(width: 1440, height: 900))
+        defer { vm.didDisappear(); fixture.close() }
+        vm.selectStandalone(WorkflowStandalone.orchestratorID)
+        await vm.sidebarTask?.value
+
+        // when / then — the first entry, then leaving and re-entering the retained layout on the same activity.
+        for round in 1 ... 3 {
+            harness.tasksSubject.send([task])
+            await fixture.settle { fixture.element("Orchestrator decision activity") != nil && vm.selectedActivity?.leasedMemberCount == 1 }
+            #expect(fixture.element("Orchestrator decision activity") != nil, "round \(round)")
+            #expect(vm.selectedActivity?.leasedMemberCount == 1, "round \(round)")
+            #expect(vm.selectedActivity?.residentColumnCount == 1, "round \(round)")
+            harness.tasksSubject.send([])
+            await fixture.settle { vm.selectedActivity?.columns.isEmpty == true }
+        }
+    }
 }

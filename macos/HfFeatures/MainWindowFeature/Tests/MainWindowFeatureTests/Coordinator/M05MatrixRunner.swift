@@ -72,6 +72,13 @@ import Testing
         /// The first such element, for geometry, enabled and press checks.
         func element(_ text: String) -> NSObject? { ShellMatrix.element(text, in: window) }
 
+        /// The composer's trailing slot. "Stop task" also labels the stop sheet and the overflow item, so the slot is
+        /// located by identifier.
+        var trailingSlot: NSObject? { element("task-composer.trailing-action") }
+
+        /// The accessibility label of the trailing slot, `nil` when no composer renders one.
+        var trailingLabel: String? { trailingSlot.flatMap(ShellMatrix.label) }
+
         /// Whether the principal toolbar item draws an element whose label starts with `prefix`. Timers are excluded by
         /// matching the prefix, so "Running" matches "Running 04:12".
         func principalHas(prefix: String) -> Bool {

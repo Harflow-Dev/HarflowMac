@@ -178,6 +178,8 @@ struct M05TranscriptStateMatrixHostedTests {
             #expect(!ctx.has(M04ToolbarEvidence.contextTitle(ctx.coordinator)), "loading toolbar does not show the caption \(ctx.name)")
             #expect(!ctx.fixture.hasPane, "no pane in the skeleton \(ctx.name)")
             #expect(!ctx.has("Stop"), "no Stop control while loading \(ctx.name)")
+            #expect(!ctx.has("Stop task"), "no Stop task slot while loading \(ctx.name)")
+            #expect(ctx.trailingLabel == nil || ctx.trailingLabel == "Send", "no stop in the trailing slot while loading \(ctx.name)")
         })
     }
 
@@ -202,6 +204,8 @@ struct M05TranscriptStateMatrixHostedTests {
             #expect(ctx.has("Loading task"), "skeleton drawn \(ctx.name)")
             #expect(!ctx.fixture.hasPane, "no pane in the skeleton \(ctx.name)")
             #expect(!ctx.has("Stop"), "no Stop control while loading \(ctx.name)")
+            #expect(!ctx.has("Stop task"), "no Stop task slot while loading \(ctx.name)")
+            #expect(ctx.trailingLabel == nil || ctx.trailingLabel == "Send", "no stop in the trailing slot while loading \(ctx.name)")
         })
     }
 

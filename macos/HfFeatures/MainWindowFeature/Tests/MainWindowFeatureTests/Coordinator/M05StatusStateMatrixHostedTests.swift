@@ -57,10 +57,12 @@ struct M05StatusStateMatrixHostedTests {
     }
 
     /// What no state in this suite shows unless it is the state: the pane is closed and the composer is present.
-    private static func commonChecks(_ ctx: M05MatrixRunner.Context) {
+    ///
+    /// The composer's trailing slot is labelled "Stop task" (or "Stopping…") while the task is running and stoppable with no
+    /// sendable draft, and "Send" otherwise: HarflowDesign 5539168 `task/running-composer-empty` and `-draft`, record 8312376.
+    private static func commonChecks(_ ctx: M05MatrixRunner.Context, trailing: String = "Send") {
         #expect(!ctx.fixture.hasPane, "pane closed by default \(ctx.name)")
-        let button = ctx.vm.messageBoxModel.buttonLabel
-        #expect(!button.isEmpty && ctx.has(button), "composer action \(button) present \(ctx.name)")
+        #expect(ctx.trailingLabel == trailing, "composer trailing slot \(trailing) \(ctx.name): \(ctx.trailingLabel ?? "absent")")
     }
 
     /// The identifiers of the notices and banners that must be absent from a state that does not own them.
@@ -78,11 +80,13 @@ struct M05StatusStateMatrixHostedTests {
     private static func running() -> M05MatrixRunner.Spec {
         base("running-stop", build: {
             .init(harness: M05Fixtures.harness(M05Fixtures.task(status: "running")))
-        }, ready: { $0.has("Stop") && $0.principalHas(prefix: "Running") }, verify: { ctx in
-            commonChecks(ctx)
+        }, ready: { $0.trailingLabel == "Stop task" && $0.principalHas(prefix: "Running") }, verify: { ctx in
+            commonChecks(ctx, trailing: "Stop task")
             #expect(ctx.principalHas(prefix: "Running"), "badge Running \(ctx.name) \(ctx.principalStrings)")
-            let stop = try #require(ctx.element("Stop"))
-            #expect(ShellMatrix.isEnabled(stop) == true, "composer Stop enabled \(ctx.name)")
+            let stop = try #require(ctx.trailingSlot)
+            #expect(ShellMatrix.isEnabled(stop) == true, "composer Stop task slot enabled \(ctx.name)")
+            #expect(!ctx.has("Send now"), "no Send now without a draft \(ctx.name)")
+            #expect(!ctx.has("task-composer.stop"), "no bordered Stop \(ctx.name)")
             for absent in treatmentIDs { #expect(!ctx.has(absent), "no notice or banner \(absent) \(ctx.name)") }
         })
     }
@@ -92,11 +96,11 @@ struct M05StatusStateMatrixHostedTests {
         var spec = base("stop-requested", build: {
             holder.fixtures = TaskDetailVMTests.Fixtures()
             return .init(harness: M05Fixtures.harness(M05Fixtures.task(status: "running"), fixtures: holder.fixtures), retained: [holder])
-        }, ready: { $0.has("Stopping…") && $0.has("task-state-stopping") }, verify: { ctx in
-            commonChecks(ctx)
+        }, ready: { $0.trailingLabel == "Stopping…" && $0.has("task-state-stopping") }, verify: { ctx in
+            commonChecks(ctx, trailing: "Stopping…")
             #expect(ctx.within("task-state-stopping", has: "Stop requested"))
             #expect(ctx.within("task-state-stopping", has: "This run has not exited yet. The status changes when Harflow records the outcome."))
-            let stop = try #require(ctx.element("Stopping…"))
+            let stop = try #require(ctx.trailingSlot)
             #expect(ShellMatrix.isEnabled(stop) == false, "Stopping… disabled \(ctx.name)")
             #expect(ctx.vm.task?.status == .running)
             #expect(ctx.principalHas(prefix: "Running"), "badge stays Running \(ctx.name) \(ctx.principalStrings)")
@@ -175,7 +179,9 @@ struct M05StatusStateMatrixHostedTests {
             : "It can't tell whether the process watching this run is alive. Output may or may not still be captured, "
                 + "and a later summary is unknown. Check status again before starting a replacement."
         var spec = base(state, build: { .init(harness: M05Fixtures.harness(task)) }, ready: { $0.within(id, has: title) }, verify: { ctx in
-            commonChecks(ctx)
+            // 5539168 draws these banners with the legacy bordered Stop and did not redraw the composer. The "Stop task" slot
+            // is the native generalisation of a78b1c49 (running, stoppable, no sendable draft); it deviates from the drawing.
+            commonChecks(ctx, trailing: "Stop task")
             #expect(ctx.within(id, has: body), "banner body \(ctx.name)")
             #expect(ctx.has("task-state-stop") && ctx.has("task-state-refresh"), "Stop task and Refresh \(ctx.name)")
             let stop = try #require(ctx.element("task-state-stop"))
@@ -216,6 +222,8 @@ struct M05StatusStateMatrixHostedTests {
             #expect(ShellMatrix.isEnabled(retry) == true)
             #expect(ctx.vm.messageBoxModel.placeholder == "Unavailable until status can be read")
             #expect(!ctx.has("Stop"), "no Stop \(ctx.name)")
+            #expect(!ctx.has("Stop task"), "no Stop task anywhere \(ctx.name)")
+            #expect(ctx.trailingLabel == "Send", "slot is Send, never Stop task \(ctx.name)")
             #expect(ctx.principalHas(prefix: "Status unavailable"), "badge \(ctx.name) \(ctx.principalStrings)")
         })
         spec.drive = { ctx in
@@ -268,7 +276,8 @@ struct M05StatusStateMatrixHostedTests {
     }
 
     private static func verifyContinuation(_ state: String, id: String, reason: String, _ ctx: M05MatrixRunner.Context) throws {
-        commonChecks(ctx)
+        // The accepted successor is running and stoppable, so its slot reads "Stop task"; every other continuation state sends.
+        commonChecks(ctx, trailing: state == "continue-started" ? "Stop task" : "Send")
         switch state {
         case "launch-unknown":
             #expect(ctx.within(id, has: "The engine did not report back after Continue, so a task may exist. Don't resend yet."))

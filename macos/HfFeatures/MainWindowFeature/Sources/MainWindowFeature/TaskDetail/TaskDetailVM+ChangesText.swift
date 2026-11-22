@@ -76,26 +76,20 @@ extension TaskDetailVM {
     /// (loading, a note) neither confirms nor refutes the selection, so it stays.
     func reconcileChangesSelection() {
         guard let selection = changesSelection else {
-            cancelChangesPatch()
-            if changesDiff != .none, !isReloadFailure { changesDiff = .none }
+            dropChangesDiff(clearingSelection: false, keepingReloadFailure: true)
             return
         }
         guard let member = changesLifecycle.memberID else { return }
         guard selection.taskID == member else {
-            changesSelection = nil
-            cancelChangesPatch()
-            if changesDiff != .none, !isReloadFailure { changesDiff = .none }
+            dropChangesDiff(clearingSelection: true, keepingReloadFailure: true)
             return
         }
         guard changesLifecycle.isDocument else {
-            cancelChangesPatch()
-            if changesDiff != .none { changesDiff = .none }
+            dropChangesDiff(clearingSelection: false, keepingReloadFailure: false)
             return
         }
         guard let facts = changesLifecycle.rowFacts[selection.selector], facts.hasText else {
-            changesSelection = nil
-            cancelChangesPatch()
-            if changesDiff != .none, !isReloadFailure { changesDiff = .none }
+            dropChangesDiff(clearingSelection: true, keepingReloadFailure: true)
             return
         }
         if let (scope, count) = changesPresentation.revealLocation(for: selection) {
@@ -103,6 +97,14 @@ extension TaskDetailVM {
             if count > current { changesRevealLimits[scope] = count }
         }
         readChangesPatch(selection, facts: facts)
+    }
+
+    /// The shared tail of every reconciliation exit that drops the diff: optionally clears the selection, cancels the patch
+    /// read, then clears the diff unless it is the reload failure that has no row to retry and `keepingReloadFailure` is set.
+    private func dropChangesDiff(clearingSelection: Bool, keepingReloadFailure: Bool) {
+        if clearingSelection { changesSelection = nil }
+        cancelChangesPatch()
+        if changesDiff != .none, !(keepingReloadFailure && isReloadFailure) { changesDiff = .none }
     }
 
     /// Cancels the outstanding patch read and makes every earlier patch generation stale.

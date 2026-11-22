@@ -46,9 +46,37 @@ import Testing
         await waitForCallRows(in: fixture)
 
         // then
-        #expect(fixture.element("workflow-on-demand-calls") != nil)
         #expect(fixture.element("Runs only when the orchestrator calls it, one call at a time.") != nil)
-        #expect(fixture.element("CALLS") != nil)
+        // The call list lives in the inspector document (ae337f06): its selectors are NSButtons in one scroll view.
+        let selectors = fixture.descendants
+.compactMap { $0 as? NSButton }
+            .filter { $0.accessibilityIdentifier().hasPrefix("workflow-call-selector-") }
+        let newest = selectors.filter { $0.title.hasPrefix("Call 2 ") }
+        let oldest = selectors.filter { $0.title.hasPrefix("Call 1 ") }
+        #expect(newest.count == 1 && oldest.count == 1, "one selector each: \(selectors.map(\.title))")
+        let call2 = try #require(newest.first)
+        let call1 = try #require(oldest.first)
+        let scroll = try #require(call2.enclosingScrollView, "inspector document scroll view")
+        #expect(call1.enclosingScrollView === scroll)
+        #expect(scroll !== fixture.canvasScroll)
+        #expect(call2.convert(call2.bounds, to: nil).minY > call1.convert(call1.bounds, to: nil).minY, "The newest call is listed first")
+        var seen = Set<String>()
+        // The same traversal and matching as `fixture.element(_:)`, which reaches the SwiftUI nodes.
+        let headings = fixture.descendants.flatMap { fixture.elements(in: $0) }.filter { element in
+            guard fixture.matches(element, "CALLS"), let frame = fixture.frame(element) else { return false }
+            return seen.insert("CALLS\(frame)").inserted
+        }
+        #expect(headings.count == 1)
+        let heading = try #require(headings.first.flatMap { fixture.frame($0) })
+        let centre = CGPoint(x: heading.midX, y: heading.midY)
+        #expect(scroll.convert(scroll.bounds, to: nil).contains(centre))
+        // The heading sits directly in the shared document: no scroll view nested inside it holds the heading. The search
+        // stays inside `scroll`, because the default run sidebar stays mounted at opacity 0 under the selected pane and its
+        // own scroll views overlap this position.
+        let nested = fixture.descendants
+.compactMap { $0 as? NSScrollView }
+            .filter { $0 !== scroll && $0.isDescendant(of: scroll) && $0.convert($0.bounds, to: nil).contains(centre) }
+        #expect(nested.isEmpty, "nested scroll views over CALLS: \(nested)")
         #expect(fixture.element("Open task") != nil)
         let first = try #require(callRow("Call 2 · Done", in: fixture))
         let second = try #require(callRow("Call 1 · Done", in: fixture))
@@ -68,8 +96,7 @@ import Testing
 
     private func waitForCallRows(in fixture: RedesignHost) async {
         await fixture.settle {
-            fixture.element("workflow-on-demand-calls") != nil
-                && callRow("Call 2", in: fixture) != nil && callRow("Call 1", in: fixture) != nil
+            fixture.element("CALLS") != nil && callRow("Call 2", in: fixture) != nil && callRow("Call 1", in: fixture) != nil
         }
     }
 

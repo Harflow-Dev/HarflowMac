@@ -1,4 +1,5 @@
 import AppKit
+import HfRepository
 import HfTestUtilities
 @testable import MainWindowFeature
 import MonitorCore
@@ -292,6 +293,36 @@ import Testing
         }
     }
 
+    /// A running task whose Events document is taller than the 620 point window. The Events list lays its records out on the
+    /// first pass, so the stored 120 and 200 point offsets are reachable at once. The long Result (8839cf74) stays, but its
+    /// markdown fills in only after a detached parse, so it cannot be relied on for the first layout.
+    private static func tallRunning() -> TaskDetailViewModelMock {
+        let mock = PaneMocks.running()
+        let answer = (1 ... 40)
+            .map { "Paragraph \($0): the retry path re-checks the count and the slot release notifies waiters inside the lock." }
+            .joined(separator: "\n\n")
+        mock.summaryModel = SummaryPaneModel.build(task: mock.task!, summary: answer, events: [], eventsAvailability: .available)
+        let base = TaskDetailViewModelMock.previewObservation()
+        let records = (0 ..< 40).compactMap { index -> ObservedEventRecord? in
+            let raw: [String: JSONValue] = [
+                "product": .string("harflow"), "format": .string(WireContract.events.format), "v": .number(1),
+                "product_version": .string(HarflowVersion.current), "seq": .number(Double(index + 1)),
+                "kind": .string("assistant_text"), "observed_at": .null, "text": .string("Event record \(index + 1) of the retry path.")
+            ]
+            return TaskEventRecord(raw: raw).map { ObservedEventRecord(id: .init(scope: base.scope, admission: index), record: $0) }
+        }
+        mock.observationFrames = [mock.task!.taskID: EventObservationFrame(
+            taskID: mock.task!.taskID, scope: base.scope, records: records, events: base.events, items: base.items,
+            history: base.history, summary: base.summary
+        )]
+        return mock
+    }
+
+    /// How far the Events document can scroll: the precondition for restoring a stored offset.
+    private static func scrollRange(_ scroll: NSScrollView) -> CGFloat {
+        (scroll.documentView?.frame.height ?? 0) - scroll.contentView.bounds.height
+    }
+
     @Test func givenTwoConversations_whenSelectingAThenBThenA_thenEachKeepsItsPaneStateAndEventsOffset() async throws {
         // given — A: Events with Task and the usage group expanded and a stored reading position; B: Artifacts.
         let store = TaskPaneStateStore()
@@ -302,7 +333,7 @@ import Testing
         store.setOpenChoice(.open, for: "B")
         store.setSelectedTab(.artifacts, for: "B")
         let selection = PaneSelection()
-        let host = PaneHost(PaneSwitchHarness(selection: selection, store: store, mocks: ["A": PaneMocks.running(), "B": PaneMocks.running()]),
+        let host = PaneHost(PaneSwitchHarness(selection: selection, store: store, mocks: ["A": Self.tallRunning(), "B": PaneMocks.running()]),
                             size: CGSize(width: 1280, height: 620))
         defer { host.close() }
         await host.page.settle { host.headerValue("Task") == "Expanded" && host.paneScrollViews().first != nil }
@@ -311,6 +342,7 @@ import Testing
         #expect(host.headerValue("Task") == "Expanded")
         #expect(host.headerValue("Reported result and usage") == "Expanded")
         let scroll = try #require(host.paneScrollViews().first)
+        #expect(Self.scrollRange(scroll) >= 220, "the Events document must be able to scroll 220 points: \(Self.scrollRange(scroll))")
         #expect(abs(scroll.contentView.bounds.origin.y - 120) <= 2, "restored offset \(scroll.contentView.bounds.origin.y)")
 
         // when — the person reads further, then selects B. The scroll is nudged on every pass until the pane has recorded
@@ -340,6 +372,7 @@ import Testing
         #expect(host.headerValue("Task") == "Expanded")
         #expect(host.headerValue("Reported result and usage") == "Expanded")
         let again = try #require(host.paneScrollViews().first)
+        #expect(Self.scrollRange(again) >= 220, "the Events document must be able to scroll 220 points: \(Self.scrollRange(again))")
         #expect(abs(again.contentView.bounds.origin.y - 200) <= 2, "offset after returning \(again.contentView.bounds.origin.y)")
         #expect(store.expandedGroups(for: "A") == [.task, .usage])
         #expect(store.expandedGroups(for: "B").isEmpty)

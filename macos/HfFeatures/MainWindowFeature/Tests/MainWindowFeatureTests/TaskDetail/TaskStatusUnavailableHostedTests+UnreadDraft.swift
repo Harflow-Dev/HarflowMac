@@ -36,7 +36,7 @@ extension TaskStatusUnavailableHostedTests {
         #expect(field.isEnabled && field.isEditable)
         #expect(!fixture.sut.hasStatusAuthority && !fixture.sut.isStatusUnavailable)
         #expect(page.element("Current status unavailable") == nil)
-        #expect(page.element("Stop") == nil)
+        try Self.expectSendSlotWithoutStop(page, model: fixture.sut.messageBoxModel)
         let send = try #require(page.element("Send"))
         #expect(TaskStoppingHostedTests.isEnabled(send) == false)
 

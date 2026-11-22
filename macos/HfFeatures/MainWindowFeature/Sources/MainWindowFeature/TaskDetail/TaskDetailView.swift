@@ -407,16 +407,10 @@ struct TaskDetailView<VM: TaskDetailViewModel>: View {
                 TaskDetailToolbar(
                     snapshot: TaskDetailToolbarSnapshot(viewModel, task: task, showsInspector: isStandalone ? pane.isOpen : eventsExpanded,
                                                         isRightPane: isStandalone, chips: toolbarChips(task)),
-                    actions: TaskDetailToolbarActions(
-                        takeover: viewModel.didTapTakeover, cancel: viewModel.didTapCancel,
-                        copyResumeCommand: viewModel.didTapCopyResumeCommand, openTask: viewModel.didTapTask,
-                        showRawEvents: showEvents,
-                        toggleInspector: toggleInspector,
-                        copyTaskID: viewModel.didTapCopyTaskID,
-                        openRepository: { openURL(URL(fileURLWithPath: task.repoPath, isDirectory: true)) },
-                        copyRepoPath: viewModel.didTapCopyRepoPath,
+                    actions: Self.toolbarActions(viewModel: viewModel, task: task, hooks: TaskDetailToolbarHooks(
+                        showRawEvents: showEvents, toggleInspector: toggleInspector, openRepository: { openURL($0) },
                         revealContinuity: revealContinuityChip, revealNotices: revealNoticesChip, revealAccess: revealAccessChip
-                    ),
+                    )),
                     onEvaluation: onToolbarEvaluation,
                     chipFocus: isStandalone ? TaskDetailToolbarFocus(focus: $originFocus, accessibility: $originAccessibilityFocus) : nil
                 ).equatable()

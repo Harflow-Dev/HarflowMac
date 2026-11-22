@@ -18,6 +18,8 @@ struct WorkflowSelectedActivityView: View {
     @Environment(\.workflowInspectorApprovalController) private var approvalController
     @State private var pickerHeight: CGFloat = 0
     @State private var residencyHandoffs = ParallelResidencyHandoffStore()
+    /// This instance's claim on the activity viewport. A replaced instance's disappearance must not zero a newer owner's.
+    @State private var viewportOwner = UUID()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -68,12 +70,13 @@ struct WorkflowSelectedActivityView: View {
                 Color.clear
                     .allowsHitTesting(false)
                     .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-                        activity.updateViewport(offset: 0, width: width)
+                        activity.updateViewport(owner: viewportOwner, offset: 0, width: width)
                     }
             }
         }
         .onChange(of: activity.columns.map(\.id), initial: true) { _, ids in residencyHandoffs.retain(ids: Set(ids)) }
-        .onDisappear { activity.updateViewport(offset: 0, width: 0) }
+        .onAppear { activity.claimViewport(owner: viewportOwner) }
+        .onDisappear { activity.releaseViewport(owner: viewportOwner) }
     }
 }
 

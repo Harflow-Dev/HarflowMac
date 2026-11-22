@@ -128,8 +128,8 @@ struct M05ActionsTopBarStateMatrixHostedTests {
             return .init(harness: harness, retained: [holder])
         }, drive: { ctx in
             ctx.harness.tasksSubject.send([current])
-            await waitUntil(timeout: 10) { ctx.fixture.pump(); return ctx.has("Stop") }
-            if let stop = ctx.element("Stop") { _ = ShellMatrix.press(stop) }
+            await waitUntil(timeout: 10) { ctx.fixture.pump(); return ctx.trailingLabel == "Stop task" }
+            if let stop = ctx.trailingSlot { _ = ShellMatrix.press(stop) }
             await waitUntil(timeout: 10) { ctx.fixture.pump(); return holder.request != nil }
             guard let request = holder.request else { return }
             ctx.coordinator.stopConfirmationBuilder = {

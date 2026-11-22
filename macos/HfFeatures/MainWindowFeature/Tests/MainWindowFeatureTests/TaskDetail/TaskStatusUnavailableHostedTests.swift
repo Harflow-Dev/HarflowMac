@@ -12,6 +12,15 @@ import Testing
 @MainActor @Suite(.serialized) struct TaskStatusUnavailableHostedTests {
     static let body = "The engine did not answer. Everything below was read earlier and may be out of date."
 
+    /// No Stop control anywhere, and the composer's trailing slot is Send (HarflowDesign 5539168 `task/running-composer-empty`).
+    static func expectSendSlotWithoutStop(_ page: RedesignHost, model: MessageBoxModel) throws {
+        #expect(model.stopAction == nil && model.stopWithFocusAction == nil)
+        #expect(page.element("Stop") == nil)
+        #expect(page.element("Stop task") == nil)
+        let slot = try #require(page.element("task-composer.trailing-action"))
+        #expect(page.string(slot, "accessibilityLabel") == "Send")
+    }
+
     @Test(arguments: [false, true], [588, 1000] as [CGFloat])
     func givenMountedDraft_whenStatusFailsAndRetryRecoversEquivalentSnapshot_thenNoticeLocksAndRestoresDraft(dark: Bool, width: CGFloat) async throws {
         // given
@@ -58,7 +67,7 @@ import Testing
         #expect(fixture.sut.messageBoxModel.placeholder == "Unavailable until status can be read")
         #expect(fixture.sut.messageBoxModel.hint.isEmpty)
         #expect(fixture.sut.topBarContent?.badge == .statusUnavailable)
-        #expect(page.element("Stop") == nil)
+        try Self.expectSendSlotWithoutStop(page, model: fixture.sut.messageBoxModel)
         let entries = try #require(table.owner?.entries)
         let notice = try #require(entries.firstIndex { if case .taskState = $0 { return true }; return false })
         for index in entries.indices { if case .row = entries[index] { #expect(notice < index) } }

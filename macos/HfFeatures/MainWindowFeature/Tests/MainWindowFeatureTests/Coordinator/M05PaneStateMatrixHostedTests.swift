@@ -92,7 +92,7 @@ struct M05PaneStateMatrixHostedTests {
         return M05MatrixRunner.Spec(suite: M05StateTable.Suite.pane.rawValue, state: state, config: config { $0.openPane = open }, build: {
             .init(harness: M05Fixtures.harness(task))
         }, drive: { ctx in ctx.harness.tasksSubject.send([task]) }, ready: { ctx in
-            ctx.vm.task != nil && (open ? ctx.fixture.hasPane : ctx.has("Stop"))
+            ctx.vm.task != nil && (open ? ctx.fixture.hasPane : ctx.trailingLabel == "Stop task")
         }, verify: { ctx in
             if open {
                 try assertPaneChrome(ctx)

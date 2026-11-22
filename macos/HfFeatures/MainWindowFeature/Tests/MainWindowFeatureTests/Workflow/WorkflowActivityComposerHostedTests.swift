@@ -14,6 +14,8 @@ struct WorkflowActivityComposerHostedTests {
     func givenActivityTargetDraft_whenSwitchingNativeOrChildTarget_thenOldDraftCannotBeSentToNewTarget(_ child: Bool) async throws {
         // given
         let harness = WorkflowTests().makeVM()
+        // The admission gate refuses a send before the VM has subscribed (ecc3e7a8).
+        harness.sut.didSubscribe = true
         defer { harness.sut.didDisappear() }
         let first = run(child: child, suffix: "a")
         let next = run(child: child, suffix: "b")
@@ -26,7 +28,7 @@ struct WorkflowActivityComposerHostedTests {
                 }
                 return ["status": .string("queued")]
             }
-        select(first, in: harness.sut)
+        await select(first, in: harness.sut)
         let fixture = RedesignHost(WorkflowActivityMessageComposer(viewModel: harness.sut), size: CGSize(width: 420, height: 280))
         defer { fixture.close() }
         fixture.window.makeKeyAndOrderFront(nil)
@@ -38,7 +40,7 @@ struct WorkflowActivityComposerHostedTests {
         await fixture.settle { original.stringValue == "Only for target A" }
 
         // when
-        select(next, in: harness.sut)
+        await select(next, in: harness.sut)
         await fixture.settle { field(in: fixture)?.stringValue.isEmpty == true }
         let current = try #require(field(in: fixture))
         #expect(fixture.window.makeFirstResponder(current))
@@ -68,10 +70,14 @@ struct WorkflowActivityComposerHostedTests {
 .called(0)
     }
 
-    private func select(_ raw: [String: JSONValue], in vm: WorkflowVM) {
+    /// Selects the run and node, then lets the scheduled sidebar build settle so a refusal can name its cause.
+    private func select(_ raw: [String: JSONValue], in vm: WorkflowVM) async {
         vm.selectedRun = WorkflowRunModel(raw: raw)
         vm.selectedNodeID = "work"
         vm.runSidebar = WorkflowRunSidebarPresentation.build(run: raw, nodeID: "work", attemptID: nil)
+        await vm.sidebarTask?.value
+        #expect(vm.sidebarTask == nil, "the sidebar build settled")
+        #expect(vm.runSidebar.node?["id"]?.stringValue == "work", "the sidebar shows the work node")
     }
 
     private func run(child: Bool, suffix: String) -> [String: JSONValue] {

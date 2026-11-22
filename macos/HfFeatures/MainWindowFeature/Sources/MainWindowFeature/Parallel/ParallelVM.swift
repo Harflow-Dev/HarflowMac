@@ -68,6 +68,7 @@ final class ParallelVM: ParallelViewModel {
     @ObservationIgnored private var arrivalTracker = PanelArrivalTracker()
     @ObservationIgnored private var viewportOffset: CGFloat = 0
     @ObservationIgnored private var viewportWidth: CGFloat = 0
+    @ObservationIgnored var viewportClaims = ParallelViewportClaims()
     @ObservationIgnored var residentIDs: Set<String> = []
     @ObservationIgnored var refreshingRetainedIDs: Set<String> = []
     @ObservationIgnored private var visibleIDs: Set<String> = []
@@ -176,6 +177,7 @@ final class ParallelVM: ParallelViewModel {
         orderedConversations.removeAll()
         selectedConversationID = nil
         viewportWidth = 0
+        viewportClaims.reset()
         columns.removeAll()
         cancellables.removeAll()
         itemCancellables.removeAll()
@@ -556,12 +558,13 @@ final class ParallelVM: ParallelViewModel {
     }
 }
 
-// MARK: - Workflow activity suspension
+// MARK: - Workflow activity suspension and selection
 
 extension ParallelVM {
     /// Stops hidden inspector work while retaining visited feed presentation and reading state.
     func suspendWorkflowActivity() {
         detachWorkflowMessageState()
+        viewportClaims.reset()
         updateViewport(offset: 0, width: 0)
         epoch &+= 1
         revision &+= 1
@@ -583,11 +586,7 @@ extension ParallelVM {
         leaseGenerations.removeAll()
         didSubscribe = false
     }
-}
 
-// MARK: - Workflow inspector selection
-
-extension ParallelVM {
     /// Explicit inspector selection changes residency even when its geometry is unchanged.
     func selectConversation(_ id: String) {
         guard isWorkflowInspector, conversationByID[id] != nil, selectedConversationID != id else { return }

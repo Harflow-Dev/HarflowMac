@@ -49,21 +49,37 @@ enum M05StateTable {
     /// Every state the suites mount (`notRenderable == nil`), plus the approved states the matrix lists without mounting.
     static let all: [Entry] = status + actions + pane + changes + transcript
 
+    private static let slotRecord = "HarflowDesign 5539168 `task/running-composer-empty`"
+    private static let slotRecordBoth = "HarflowDesign 5539168 `task/running-composer-empty`/`-draft` (record 8312376)"
+    private static let slotGeneralised = "The trailing slot reads \"%@\" here. HarflowDesign 5539168 draws this state with the legacy "
+        + "bordered stop control and did not redraw it; the slot is the native generalisation of a78b1c49 (running, stoppable, no sendable "
+        + "draft), pending the owner's visual pass."
+    private static let supersededSlot = "Superseded for the composer by \(slotRecordBoth): the stop control is the icon-only trailing slot labelled "
+        + "\"Stop task\", not the bordered \"Stop\" this state draws."
+    private static let stopSheetSlot = "The sheet is opened from the trailing \"Stop task\" slot (\(slotRecord), record 8312376), "
+        + "not the bordered Stop this state draws."
+
     static let status: [Entry] = [
-        entry("running-stop", .status, "running task, alive owner"),
-        entry("stop-requested", .status, "real VM with an acknowledged stop request"),
+        entry("running-stop", .status, "running task, alive owner",
+              deviation: supersededSlot),
+        entry("stop-requested", .status, "real VM with an acknowledged stop request",
+              deviation: String(format: slotGeneralised, "Stopping…")),
         entry("cancelled", .status, "cancelled task with a matching snapshot and exit code"),
         entry("timed-out", .status, "timed_out task with a matching snapshot and exit code"),
         entry("settling", .status, "completed task, capture_settling changes, published observation"),
         entry("unknown-failed", .status, "failed task without an exit code, incomplete log"),
         entry("unknown-done", .status, "completed task reconstructed from closing output"),
-        entry("owner-lost", .status, "running task, owner_state dead"),
-        entry("unverified", .status, "running task, owner_state undecidable"),
+        entry("owner-lost", .status, "running task, owner_state dead",
+              deviation: String(format: slotGeneralised, "Stop task")),
+        entry("unverified", .status, "running task, owner_state undecidable",
+              deviation: String(format: slotGeneralised, "Stop task")),
         entry("launch-unknown", .status, "continuation fixture, ctl timed out after Continue"),
         entry("status-unavailable", .status, "status read answers no task after a good read"),
         entry("taken-over", .status, "cancelled task with taken_over"),
         entry("continue-starting", .status, "continuation fixture, ctl held pending"),
-        entry("continue-started", .status, "continuation fixture, accepted"),
+        entry("continue-started", .status, "continuation fixture, accepted",
+              deviation: "The accepted successor is running and stoppable, so the trailing slot reads \"Stop task\" "
+                  + "(\(slotRecord), record 8312376); the design predates it."),
         entry("continue-refused", .status, "continuation fixture, engine refusal"),
         entry("failed-continue", .status, "failed task with exit code 1")
     ]
@@ -74,8 +90,10 @@ enum M05StateTable {
         entry("overflow-settled", .actionsTopBar, "done task, pane on Changes, More menu opened",
               deviation: "Native item titles carry no ellipsis (Open in terminal); the design draws ellipses."),
         entry("overflow-subtask", .actionsTopBar, "running task spawned by a parent, More menu opened"),
-        entry("stop-dialog", .actionsTopBar, "running task, stop confirmation sheet presented"),
-        entry("stop-dialog-earlier-turns", .actionsTopBar, "running task with an earlier running turn, stop confirmation"),
+        entry("stop-dialog", .actionsTopBar, "running task, stop confirmation sheet presented",
+              deviation: stopSheetSlot),
+        entry("stop-dialog-earlier-turns", .actionsTopBar, "running task with an earlier running turn, stop confirmation",
+              deviation: stopSheetSlot),
         entry("takeover-dialog", .actionsTopBar, "running task, takeover confirmation requested"),
         entry("topbar-facts", .actionsTopBar, "pane open on Events with the notices group expanded"),
         entry("topbar-resource", .actionsTopBar, "running task holding heavy-build"),
@@ -85,7 +103,8 @@ enum M05StateTable {
     static let pane: [Entry] = [
         entry("pane-overlay", .pane, "done task, Changes open, 1000x620 only"),
         entry("pane-split", .pane, "done task, Changes open, 1280x800 only"),
-        entry("pane-running-closed", .pane, "running task, no open choice"),
+        entry("pane-running-closed", .pane, "running task, no open choice",
+              deviation: supersededSlot),
         entry("pane-running-open", .pane, "running task, pane open on Events"),
         entry("pane-failed-closed", .pane, "failed task, no open choice"),
         entry("events-populated", .pane, "done task with enforcement and notices, Events open"),
