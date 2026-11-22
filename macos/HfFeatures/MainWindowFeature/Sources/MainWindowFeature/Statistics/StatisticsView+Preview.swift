@@ -54,6 +54,11 @@
                 childrenFooter: "Showing 1 of 96 runs",
                 canShowNodes: true
             )]
+            value.taskSummary = StatisticsTaskSummary(
+                tasksRun: "128", tasksDetail: "Last 30 days", successRate: "94%",
+                successDetail: "7 failed · 2 cancelled", successCaption: "As of latest finished execution",
+                coverage: ["Agent-started tasks count as top-level tasks."]
+            )
             value.coverage = ["Retained history only · Usage coverage varies by harness"]
             self.presentation = value
         }

@@ -109,7 +109,7 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
             } else if let nodes = viewModel.presentation.nodes {
                 nodePage(nodes)
             } else {
-                reportedCost
+                statCards
                 chart
                 ranking
             }
@@ -121,15 +121,65 @@ struct StatisticsView<VM: StatisticsViewModel>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    @ViewBuilder private var statCards: some View {
+        if let summary = viewModel.presentation.taskSummary {
+            VStack(alignment: .leading, spacing: 8) {
+                statCardRow(summary)
+                ForEach(Array(summary.coverage.enumerated()), id: \.offset) { _, line in
+                    Text(line).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+                }
+            }
+        } else {
+            reportedCost
+        }
+    }
+
+    private func statCardRow(_ summary: StatisticsTaskSummary) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 12) {
+                tasksRunCard(summary)
+                successRateCard(summary)
+                reportedCost
+            }
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
+                    tasksRunCard(summary)
+                    successRateCard(summary)
+                }
+                reportedCost
+            }
+            VStack(alignment: .leading, spacing: 12) {
+                tasksRunCard(summary)
+                successRateCard(summary)
+                reportedCost
+            }
+        }
+    }
+
+    private func tasksRunCard(_ summary: StatisticsTaskSummary) -> some View {
+        statCard(title: "Tasks run", value: summary.tasksRun, lines: [summary.tasksDetail])
+    }
+
+    private func successRateCard(_ summary: StatisticsTaskSummary) -> some View {
+        statCard(title: "Success rate", value: summary.successRate, lines: [summary.successDetail, summary.successCaption])
+    }
+
     private var reportedCost: some View {
         let cost = viewModel.presentation.reportedCost
-        return VStack(alignment: .leading, spacing: 4) {
-            Text("Reported cost").font(.hf(.caption)).foregroundStyle(Color.secondaryText)
-            Text(cost.value).font(.hf(.title)).foregroundStyle(Color.primaryText)
-            Text(cost.coverage).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+        return statCard(title: "Reported cost", value: cost.value, lines: [cost.coverage])
+    }
+
+    private func statCard(title: String, value: String, lines: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.hf(.caption)).foregroundStyle(Color.secondaryText)
+            Text(value).font(.hf(.title)).foregroundStyle(Color.primaryText)
+            ForEach(Array(lines.filter { !$0.isEmpty }.enumerated()), id: \.offset) { _, line in
+                Text(line).font(.hf(.caption)).foregroundStyle(Color.secondaryText).fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(minWidth: 180, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .statisticsCard()
+        .accessibilityElement(children: .combine)
     }
 
     private var controls: some View {

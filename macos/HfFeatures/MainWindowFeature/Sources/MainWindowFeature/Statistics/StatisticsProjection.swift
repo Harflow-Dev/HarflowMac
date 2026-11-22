@@ -83,6 +83,9 @@ enum StatisticsProjection {
         }
         let queryCalendar = snapshot.calendar ?? calendar
         let anchor = snapshot.anchorDate ?? now
+        if !snapshot.facts.isEmpty {
+            result.taskSummary = taskSummary(snapshot: snapshot, selection: selection, calendar: queryCalendar, anchor: anchor)
+        }
         let ranking = ranking(facts: filtered, matching: matching, selection: selection, calendar: queryCalendar)
         result.rows = ranking.rows
         result.chart = chart(facts: filtered, executions: matching, selection: selection, now: anchor, calendar: queryCalendar)
@@ -100,6 +103,7 @@ enum StatisticsProjection {
             result.nodes = nodePage(id: id, roots: roots, executions: members, selection: selection, calendar: queryCalendar)
             result.coverage = coverage(snapshot, selected: members, label: "Selected workflow")
         }
+        if result.nodes != nil { result.taskSummary = nil }
         return result
     }
 

@@ -25,36 +25,66 @@ import Testing
         try await assertViewport(style: style, width: 1000, host: host, window: window)
     }
 
-    @Test func givenStaleReadyOverview_whenMounted_thenReportedCostAppearsOnlyOutsideWorkflowDrilldown() async {
+    @Test func givenStaleReadyOverview_whenMounted_thenCardsAppearOnlyOutsideWorkflowDrilldown() async {
         // given
         let model = CaptureModel()
         model.presentation.refreshFailure = "Showing the last complete snapshot."
-        model.presentation.reportedCost = .init(value: "$12.50", coverage: "Reported by 5 of 5 executions")
         let fixture = RedesignHost(StatisticsView(model), size: CGSize(width: 1000, height: 620), appearance: .light)
         defer { fixture.close() }
+        let cards: [(title: String, parts: [String])] = [
+            ("Tasks run", ["128", "Last 30 days"]),
+            ("Success rate", ["94%", "7 failed · 2 cancelled", "As of latest finished execution"]),
+            ("Reported cost", ["$12.50", "Reported by 5 of 5 executions"])
+        ]
+        let agentLine = "Agent-started tasks count as top-level tasks."
+        func cardMatches() -> Bool {
+            cards.allSatisfy { card in
+                guard let value = fixture.cardValue(card.title) else { return false }
+                return card.parts.allSatisfy { value.contains($0) }
+            }
+        }
 
         // when
-        await fixture.settle {
-            fixture.element("Reported cost") != nil
-                && fixture.element("$12.50") != nil
-                && fixture.element("Reported by 5 of 5 executions") != nil
-        }
+        await fixture.settle { cardMatches() && fixture.hasText(agentLine) }
 
         // then
         #expect(model.presentation.state == .ready)
         #expect(model.presentation.refreshFailure != nil)
-        #expect(fixture.element("Reported cost") != nil)
-        #expect(fixture.element("$12.50") != nil)
-        #expect(fixture.element("Reported by 5 of 5 executions") != nil)
+        for card in cards {
+            let value = fixture.cardValue(card.title)
+            #expect(value != nil, "No \(card.title) card")
+            for part in card.parts { #expect(value?.contains(part) == true, "\(card.title) card lacks \(part): \(value ?? "-")") }
+        }
+        #expect(fixture.hasText(agentLine))
 
         model.presentation.nodes = .init(
             workflowID: "flow", title: "Build", subtitle: "Workflow node",
             wallTime: "Unavailable", executionTime: "10 min", usage: "Unavailable",
             rows: [], footer: "No executions"
         )
-        await fixture.settle { fixture.element("Reported cost") == nil }
-        #expect(fixture.element("Reported cost") == nil)
-        #expect(fixture.element("Reported by 5 of 5 executions") == nil)
+        await fixture.settle {
+            !fixture.hasText("Reported cost") && !fixture.hasText("Tasks run") && !fixture.hasText("Success rate")
+                && !fixture.hasText(agentLine)
+        }
+        for text in ["Tasks run", "Success rate", "Reported cost", agentLine] {
+            #expect(!fixture.hasText(text), "\(text) must not show on the node page: \(fixture.describeText(text))")
+        }
+    }
+
+    @Test func givenNoTaskSummary_whenMounted_thenOnlyReportedCostCardShows() async {
+        // given
+        let model = CaptureModel()
+        model.presentation.taskSummary = nil
+        let fixture = RedesignHost(StatisticsView(model), size: CGSize(width: 1000, height: 620), appearance: .light)
+        defer { fixture.close() }
+
+        // when
+        await fixture.settle { fixture.hasText("Reported cost") }
+
+        // then
+        #expect(fixture.hasText("Reported cost"))
+        #expect(!fixture.hasText("Tasks run"))
+        #expect(!fixture.hasText("Success rate"))
     }
 
     private func assertViewport(style: NSScroller.Style, width: CGFloat, host: NSHostingView<StatisticsView<CaptureModel>>, window: NSWindow) async throws {
@@ -147,8 +177,31 @@ import Testing
                 canShowNodes: true, rank: 1, glyph: "point.3.connected.trianglepath.dotted", share: "100%", kindLabel: "Workflow"
             )]
             value.coverage = ["Retained history only · Usage coverage varies by harness"]
+            value.taskSummary = CaptureModel.populatedSummary
+            value.reportedCost = .init(value: "$12.50", coverage: "Reported by 5 of 5 executions")
             return value
         }()
+
+        static let populatedSummary = StatisticsTaskSummary(
+            tasksRun: "128", tasksDetail: "Last 30 days", successRate: "94%",
+            successDetail: "7 failed · 2 cancelled", successCaption: "As of latest finished execution",
+            coverage: [
+                "Agent-started tasks count as top-level tasks.",
+                "Counts tasks with a finished execution and an identifiable first run in this period. "
+                    + "Tasks still running without a finished execution aren't shown.",
+                "12 later executions aren't counted because their first run couldn't be identified in the available history."
+            ]
+        )
+
+        static let unavailableSummary = StatisticsTaskSummary(
+            tasksRun: "0", tasksDetail: "Last 30 days", successRate: "Unavailable",
+            successDetail: "No eligible finished tasks", successCaption: "",
+            coverage: [
+                "Counts tasks with a finished execution and an identifiable first run in this period. "
+                    + "Tasks still running without a finished execution aren't shown.",
+                "3 execution records couldn't be read and aren't counted."
+            ]
+        )
 
         func didAppear() {}
         func didDisappear() {}
@@ -218,6 +271,121 @@ extension ActivityFeedApprovalHostedTests {
                     )
                 }
             }
+        }
+    }
+}
+
+extension RedesignHost {
+    /// The combined accessibility value of the card titled `title`, e.g. "Tasks run, 128, Last 30 days".
+    func cardValue(_ title: String) -> String? {
+        descendants.flatMap { elements(in: $0) }
+            .compactMap { string($0, "accessibilityValue") }
+            .first { $0.hasPrefix(title + ",") }
+    }
+
+    /// Debug description of every element mentioning `text`.
+    func describeText(_ text: String) -> [String] {
+        descendants.flatMap { elements(in: $0) }.compactMap { element in
+            let parts = ["accessibilityLabel", "accessibilityTitle", "accessibilityValue", "accessibilityRole"].map {
+                "\($0.dropFirst(13))=\(string(element, $0) ?? "-")"
+            }
+            guard parts.contains(where: { $0.contains(text) }) else { return nil }
+            return "\(type(of: element)) \(parts.joined(separator: "|")) frame=\(String(describing: frame(element)))"
+        }
+    }
+
+    /// Whether any accessibility element's label, title or value contains `text`.
+    func hasText(_ text: String) -> Bool {
+        descendants.flatMap { elements(in: $0) }.contains { element in
+            ["accessibilityLabel", "accessibilityTitle", "accessibilityValue"].contains {
+                string(element, $0)?.contains(text) == true
+            }
+        }
+    }
+}
+
+extension ActivityFeedApprovalHostedTests {
+    @Test func givenStatisticsCards_whenHostedInBothAppearances_thenThreeCardsFitWithoutClipping() async throws {
+        let summaries: [(name: String, summary: StatisticsTaskSummary)] = [
+            ("populated", StatisticsPreparedSurfaceCaptureTests.CaptureModel.populatedSummary),
+            ("unavailable", StatisticsPreparedSurfaceCaptureTests.CaptureModel.unavailableSummary)
+        ]
+        // Three across, then two plus one, then a single column (the card minimum is 180 points).
+        let sizes: [(size: CGSize, layout: String)] = [
+            (CGSize(width: 1000, height: 620), "row"), (CGSize(width: 1280, height: 800), "row"),
+            (CGSize(width: 520, height: 800), "pair"), (CGSize(width: 400, height: 900), "column")
+        ]
+        let captureDirectory = HostedCaptureEvidence.directory("HARFLOW_STATISTICS_CAPTURE_DIR")
+
+        for (size, layout) in sizes {
+            for dark in [false, true] {
+                for (name, summary) in summaries {
+                    let model = StatisticsPreparedSurfaceCaptureTests.CaptureModel()
+                    model.presentation.taskSummary = summary
+                    let fixture = RedesignHost(StatisticsView(model), size: size, appearance: dark ? .dark : .light)
+                    defer { fixture.close() }
+                    await fixture.settle { fixture.hasText("Tasks run") && fixture.hasText("Success rate") && fixture.hasText("Reported cost") }
+
+                    let frames = try StatisticsCardLayout.frames(in: fixture)
+                    StatisticsCardLayout.assert(frames, layout: layout, size: size, content: fixture.window.contentLayoutRect)
+                    #expect(fixture.hasText(summary.coverage[0]))
+
+                    if let captureDirectory {
+                        await HostedCaptureEvidence.prepare(fixture.window, dark: dark)
+                        await fixture.settle { fixture.hasStableRenderedFrame }
+                        try await HostedCaptureEvidence.record(
+                            directory: captureDirectory,
+                            subject: .init(
+                                suite: "StatisticsPreparedSurfaceCaptureTests", state: "cards-" + name,
+                                dark: dark, size: NSSize(width: size.width, height: size.height),
+                                design: .init(
+                                    route: "statistics/overview", file: "v2/scripts/screens-statistics.js",
+                                    commit: "be78fa43eac717dc8054f644825ac1b256cd9cad"
+                                )
+                            ),
+                            window: fixture.window, host: fixture.host
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Frame lookup and layout expectations for the three Statistics cards.
+@MainActor enum StatisticsCardLayout {
+    static func frames(in fixture: RedesignHost) throws -> [CGRect] {
+        try ["Tasks run", "Success rate", "Reported cost"].map { title in
+            let matches = fixture.descendants.flatMap { fixture.elements(in: $0) }.filter {
+                fixture.string($0, "accessibilityValue")?.hasPrefix(title + ",") == true
+            }
+            return try #require(
+                matches.compactMap { fixture.frame($0) }.first,
+                "No \(title) card frame: \(fixture.describeText(title))"
+            )
+        }
+    }
+
+    static func assert(_ frames: [CGRect], layout: String, size: CGSize, content: CGRect) {
+        for frame in frames {
+            #expect(frame.minX >= content.minX - 0.5 && frame.maxX <= content.maxX + 0.5, "Card clipped horizontally at \(size)")
+            #expect(frame.minY >= content.minY - 0.5 && frame.maxY <= content.maxY + 0.5, "Card clipped vertically at \(size)")
+            #expect(frame.width >= 170 && frame.height >= 60)
+        }
+        func sameRow(_ lhs: CGRect, _ rhs: CGRect) -> Bool { abs(lhs.maxY - rhs.maxY) < 1 }
+        func equalHeight(_ lhs: CGRect, _ rhs: CGRect) -> Bool { abs(lhs.height - rhs.height) < 1 }
+        func above(_ upper: CGRect, _ lower: CGRect) -> Bool { upper.minY >= lower.maxY - 0.5 }
+        switch layout {
+        case "row":
+            #expect(sameRow(frames[0], frames[1]) && sameRow(frames[1], frames[2]), "Three cards share one row at \(size)")
+            #expect(frames[0].maxX <= frames[1].minX + 0.5 && frames[1].maxX <= frames[2].minX + 0.5)
+            #expect(equalHeight(frames[0], frames[1]) && equalHeight(frames[1], frames[2]), "Row cards have equal heights at \(size)")
+        case "pair":
+            #expect(sameRow(frames[0], frames[1]) && frames[0].maxX <= frames[1].minX + 0.5, "Two cards share a row at \(size)")
+            #expect(equalHeight(frames[0], frames[1]), "Paired cards have equal heights at \(size)")
+            #expect(above(frames[0], frames[2]) && above(frames[1], frames[2]), "Cost card sits below the pair at \(size)")
+        default:
+            #expect(above(frames[0], frames[1]) && above(frames[1], frames[2]), "Cards stack in one column at \(size)")
         }
     }
 }

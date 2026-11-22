@@ -103,6 +103,18 @@ struct StatisticsCostPresentation: Equatable, Sendable {
     var coverage = "Cost coverage unavailable"
 }
 
+/// The Tasks run and Success rate cards plus their coverage lines. Present only on the ready overview.
+struct StatisticsTaskSummary: Equatable, Sendable {
+    var tasksRun = "0"
+    var tasksDetail = ""
+    var successRate = "Unavailable"
+    var successDetail = "No eligible finished tasks"
+    /// Second caption line; empty while the rate is unavailable.
+    var successCaption = ""
+    /// Separate from `StatisticsPresentation.coverage`; drawn under the cards.
+    var coverage: [String] = []
+}
+
 struct StatisticsPresentation: Equatable, Sendable {
     var state: StatisticsScreenState = .loading
     var range: StatisticsRange = .thirty
@@ -128,4 +140,5 @@ struct StatisticsPresentation: Equatable, Sendable {
     var refreshFailure: String?
     var reportedCost = StatisticsCostPresentation()
     var perHarnessCosts: [String: StatisticsCostPresentation] = [:]
+    var taskSummary: StatisticsTaskSummary?
 }
