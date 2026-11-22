@@ -68,6 +68,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             }
             selectionSubject.send(selection)
             isNewSessionPresentedSubject.send(selection == .newSession)
+            discardTaskStopFocus()
             discardStopConfirmationIfConversationChanged()
             if selection != .pendingLaunches { endPendingStop(reason: .discard, closeSheet: true) }
             selectionChangedTopBar()
@@ -76,6 +77,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
 
     public var presentedSheet: MainWindowSheet? {
         didSet {
+            if presentedSheet != nil { discardTaskStopFocus() }
             // Leaving the pending-launch Stop sheet by any route other than its own buttons discards the request.
             if presentedSheet != .stopPendingLaunch { endPendingStop(reason: .discard) }
             if presentedSheet == .stopPendingLaunch, pendingStopRequest == nil { presentedSheet = nil; return }
@@ -114,6 +116,8 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     }
 
     var stopConfirmation: TaskStopConfirmation?
+    var cancelledTaskStop: TaskStopConfirmation?
+    var taskStopDismissals: [UUID: TaskStopSheetDismissal] = [:]
     /// The pending-launch Stop request whose sheet is shown; see `MainWindowCoordinator+PendingStop`.
     var pendingStopRequest: PendingLaunchStopRequest?
     /// Requests whose sheet was closed and whose native dismissal callback has not arrived yet.
@@ -195,7 +199,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             if runtimeIsReady != state.isReady { self.runtimeIsReady = state.isReady }
             if runtimeSetupState != state { self.runtimeSetupState = state }
             refreshTaskTopBarPreMount()
-            if !state.isReady { self.presentedSheet = nil }
+            if !state.isReady { discardStopForRuntimeLoss() }
             resourceSlotsVM?.runtimeChanged()
         }
     }

@@ -26,11 +26,16 @@ extension TaskStopConfirmationHostedTests {
         NSApp.activate(ignoringOtherApps: true)
         await page.settle { fixture.sut.isMounted }
         fixture.tasksSubject.send([try #require(fixture.detailBox.value)])
-        await page.settle { page.element("Stop") != nil && MessageBoxTranscriptStyleHostedTests.editableField(in: page) != nil }
+        await page.settle { page.element("Stop task") != nil && MessageBoxTranscriptStyleHostedTests.editableField(in: page) != nil }
         let field = try #require(MessageBoxTranscriptStyleHostedTests.editableField(in: page))
         await MessageBoxTranscriptStyleHostedTests.type("Retained task draft", into: field, in: page)
-        // when
-        #expect(page.press(try #require(page.element("Stop"))))
+        // A non-empty draft turns the trailing slot into Send, so the slot no longer offers Stop.
+        await page.settle { page.element("Stop task") == nil && page.element("Send") != nil }
+        #expect(page.element("Stop task") == nil)
+        #expect(page.element("Send") != nil)
+        // when — Stop opens through the toolbar More menu's command, which is `didTapCancel`. The menu lives in the
+        // window toolbar, which this view-hosted page does not have; `TaskDetailOverflowHostedTests` covers the menu.
+        fixture.sut.didTapCancel()
         await page.settle { page.window.attachedSheet != nil }
         let sheet = try #require(page.window.attachedSheet)
         // then

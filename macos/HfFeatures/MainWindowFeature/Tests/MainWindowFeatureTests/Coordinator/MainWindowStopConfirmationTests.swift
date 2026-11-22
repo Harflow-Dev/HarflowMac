@@ -30,6 +30,95 @@ import Testing
         #expect(confirmations == 1)
     }
 
+    @Test func givenCancelledStop_whenDismissalsArrive_thenOnlyTheMatchingCurrentRequestRestoresFocus() {
+        // given
+        let sut = MainWindowCoordinator(parent: MockCoordinator())
+        sut.selection = .task("task")
+        var restores: [String] = []
+        let first = TaskStopConfirmation(conversationID: "task", taskID: "first", notStoppedTitles: [], confirm: {}) {
+            restores.append("first")
+        }
+        sut.presentStopConfirmation(first)
+        sut.cancelStop(requestID: first.id)
+        let second = TaskStopConfirmation(conversationID: "task", taskID: "second", notStoppedTitles: [], confirm: {}) {
+            restores.append("second")
+        }
+        sut.presentStopConfirmation(second)
+        sut.cancelStop(requestID: second.id)
+
+        // when — an older sheet's late dismissal arrives before the current sheet's native dismissal.
+        sut.taskStopSheetDidDismiss(requestID: first.id)
+        sut.taskStopSheetDidDismiss(requestID: second.id)
+        sut.taskStopSheetDidDismiss(requestID: second.id)
+
+        // then
+        #expect(restores == ["second"])
+        #expect(sut.stopConfirmation == nil)
+        #expect(sut.cancelledTaskStop == nil)
+    }
+
+    @Test func givenStopReplacedBeforeNativeAttachment_whenLaterStopIsCancelled_thenOnlyLaterRequestRestores() {
+        let sut = MainWindowCoordinator(parent: MockCoordinator())
+        sut.selection = .task("task")
+        var restored: [String] = []
+        let replaced = TaskStopConfirmation(conversationID: "task", taskID: "replaced", notStoppedTitles: [], confirm: {}) {
+            restored.append("replaced")
+        }
+        sut.presentStopConfirmation(replaced)
+
+        sut.presentedSheet = .workflowRunner
+        sut.presentedSheet = nil
+        let later = TaskStopConfirmation(conversationID: "task", taskID: "later", notStoppedTitles: [], confirm: {}) {
+            restored.append("later")
+        }
+        sut.presentStopConfirmation(later)
+        sut.taskStopSheetDidDismiss(requestID: replaced.id)
+        sut.cancelStop(requestID: later.id)
+        sut.taskStopSheetDidDismiss(requestID: later.id)
+
+        #expect(restored == ["later"])
+        #expect(sut.stopConfirmation == nil)
+        #expect(sut.cancelledTaskStop == nil)
+    }
+
+    @Test func givenNativeSheetDismissal_whenStandaloneStopIsCurrent_thenDismissalIsClassifiedAsCancellation() {
+        // given
+        let sut = MainWindowCoordinator(parent: MockCoordinator())
+        sut.selection = .task("task")
+        var dismissals = 0
+        let request = TaskStopConfirmation(conversationID: "task", taskID: "task", notStoppedTitles: [], confirm: {}) {
+            dismissals += 1
+        }
+        sut.presentStopConfirmation(request)
+
+        // when — the sheet binding reports Escape or another user initiated dismissal.
+        sut.dismissPresentedSheet()
+        sut.taskStopSheetDidDismiss(requestID: request.id)
+
+        // then
+        #expect(sut.presentedSheet == nil)
+        #expect(dismissals == 1)
+    }
+
+    @Test func givenCancelledStop_whenConversationChangesBeforeDismissal_thenFocusIsNotRestored() {
+        // given
+        let sut = MainWindowCoordinator(parent: MockCoordinator())
+        sut.selection = .task("task")
+        var dismissals = 0
+        let request = TaskStopConfirmation(conversationID: "task", taskID: "task", notStoppedTitles: [], confirm: {}) {
+            dismissals += 1
+        }
+        sut.presentStopConfirmation(request)
+        sut.dismissPresentedSheet()
+
+        // when
+        sut.selection = .task("other")
+        sut.taskStopSheetDidDismiss(requestID: request.id)
+
+        // then
+        #expect(dismissals == 0)
+    }
+
     @Test func givenStopRequest_whenSheetReplaced_thenCapturedCallbackCannotRun() {
         // given
         let sut = MainWindowCoordinator(parent: MockCoordinator())

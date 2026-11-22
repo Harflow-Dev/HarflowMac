@@ -2,11 +2,36 @@ import Combine
 import HfTestUtilities
 @testable import MainWindowFeature
 import MonitorCore
+import SwiftUI
 import Testing
 
 // MARK: - TaskStoppingTests
 
 @MainActor struct TaskStoppingTests {
+    @Test func givenStandaloneRunningComposer_whenDraftAndLifecycleChange_thenTrailingModeKeepsAdmissionMeaning() {
+        func composer(_ draft: String, canSend: Bool = false, allowsDraftEditing: Bool = false,
+                      isLocked: Bool = false, isBusy: Bool = false, isStopping: Bool = false,
+                      isRunning: Bool = true) -> MessageBoxView {
+            var model = MessageBoxModel(canSend: canSend, canContinue: false, isBusy: isBusy,
+                label: "Message this task", hint: "", placeholder: "Queue a message…", buttonLabel: "Send")
+            model.isRunning = isRunning
+            model.isStopping = isStopping
+            model.isLocked = isLocked
+            model.allowsDraftEditing = allowsDraftEditing
+            model.stopAction = {}
+            return MessageBoxView(model: model, style: .transcript, isStandalone: true,
+                                  text: .constant(draft)) { _ in false }
+        }
+
+        #expect(composer("").trailingMode == .stop)
+        #expect(composer(" \n\t ").trailingMode == .stop)
+        #expect(composer(" draft ", canSend: true).trailingMode == .send)
+        #expect(composer(" draft ", allowsDraftEditing: true, isBusy: true).trailingMode == .send)
+        #expect(composer(" retained ", isLocked: true).trailingMode == .stop)
+        #expect(composer(" retained ", isStopping: true).trailingMode == .stopping)
+        #expect(composer("", isRunning: false).trailingMode == .send)
+    }
+
     private func snapshot(owner: String = "alive", status: String = "running", taken: Bool = false) -> TaskInfo {
         TaskInfo(.object(["task_id": .string("abc12345"), "backend": .string("claude"),
             "status": .string(status), "taken_over": .bool(taken),
@@ -37,7 +62,7 @@ import Testing
         #expect(harness.sut.isStopping)
         #expect(harness.sut.stateTreatment?.kind == .stopping)
         #expect(harness.sut.messageBoxModel.isStopping)
-        #expect(harness.sut.messageBoxModel.canSend)
+        #expect(!harness.sut.messageBoxModel.canSend)
         #expect(harness.sut.messageBoxModel.stopAction != nil)
         harness.sut.didDisappear()
     }
@@ -61,6 +86,7 @@ import Testing
         await waitUntil { !harness.sut.isStopping }
         #expect(!harness.sut.isStopping)
         #expect(harness.sut.stateTreatment == nil)
+        #expect(harness.sut.messageBoxModel.canSend)
         harness.sut.didDisappear()
     }
 

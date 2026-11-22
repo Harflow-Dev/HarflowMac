@@ -50,6 +50,8 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
 
     /// The main window's mutually exclusive modal destination.
     var presentedSheet: MainWindowSheet? { get set }
+    /// Native dismissal is a user cancellation of the active modal.
+    func dismissPresentedSheet()
 
     /// Compatibility projection of the New Session destination; false dismisses only that destination.
     var isNewSessionPresented: Bool { get set }
@@ -112,6 +114,7 @@ public extension MainWindowNavigationCoordinator {
     func buildStartScreenView() -> AnyView { AnyView(EmptyView()) }
     func buildConnectionStatusView() -> AnyView { AnyView(EmptyView()) }
 
+    func dismissPresentedSheet() { presentedSheet = nil }
     func buildStopConfirmationView() -> AnyView { AnyView(EmptyView()) }
     func buildPendingLaunchStopView() -> AnyView { AnyView(EmptyView()) }
     func pendingLaunchStopSheetDidDismiss() {}

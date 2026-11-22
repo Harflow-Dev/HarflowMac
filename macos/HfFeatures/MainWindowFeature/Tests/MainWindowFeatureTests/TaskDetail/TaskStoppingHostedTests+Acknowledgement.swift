@@ -43,9 +43,9 @@ extension TaskStoppingHostedTests {
         NSApp.activate(ignoringOtherApps: true)
         await page.settle { fixture.sut.isMounted }
         fixture.tasksSubject.send([running])
-        await page.settle { page.element("Stop") != nil }
+        await page.settle { page.element("Stop task") != nil }
         // when — the public cancel acknowledgement precedes the parked post-ack status read.
-        #expect(page.press(try #require(page.element("Stop"))))
+        #expect(page.press(try #require(page.element("Stop task"))))
         await page.settle { page.window.attachedSheet != nil }
         let root = try #require(page.window.attachedSheet?.contentView)
         let confirm = try #require(page.elements(in: root).first { page.matches($0, "Stop task") })

@@ -104,7 +104,7 @@ extension TaskDetailVM {
         }
     }
 
-    private func presentStandaloneStopConfirmation() {
+    private func presentStandaloneStopConfirmation(onCancelDismissed: (@MainActor () -> Void)? = nil) {
         guard allowsFreshStop() else { return }
         let capturedID = currentTaskID
         routing.presentStopConfirmation(TaskStopConfirmation(
@@ -113,6 +113,9 @@ extension TaskDetailVM {
                 guard let self, !self.refuseIfConversationMovedOn(from: capturedID),
                       allowsFreshStop() else { return }
                 Task { [useCase = self.useCase] in try? await useCase.cancel(capturedID) }
+            }, cancelDidDismiss: { [weak self] in
+                guard let self, isMounted, currentTaskID == capturedID, allowsFreshStop() else { return }
+                onCancelDismissed?()
             }
         ))
     }
@@ -193,6 +196,7 @@ extension TaskDetailVM {
         let supportCurrent = messagingSupportContext.map { useCase.isMessagingContextCurrent($0) } ?? false
         let supported = supportCurrent && messagingSupported == true
         let unsupported = supportCurrent && messagingSupported == false
+        let stopping = chrome == .standalone && isStopping
         let eligible = !task.takenOver && !isStatusUnavailable && !continuationLocksActions
         let stopAction: (@MainActor () -> Void)? = if chrome == .standalone, canCancel, eligible {
             { [weak self] in self?.didTapCancel() }
@@ -200,16 +204,23 @@ extension TaskDetailVM {
             nil
         }
         messageBoxModel = MessageBoxModel(
-            canSend: eligible && hasStatusAuthority && supported, canContinue: false, isBusy: isBusy || messageSendInFlight,
+            canSend: eligible && hasStatusAuthority && supported && !stopping, canContinue: false, isBusy: isBusy || messageSendInFlight,
             label: isWorkflowBuilder ? "Message the workflow builder" : "Message this task",
             hint: unsupported || !supported || isStatusUnavailable ? "" : "Send queues; Send now requests immediate delivery when safe",
             placeholder: unsupported ? "" : isStatusUnavailable ? "Unavailable until status can be read"
                 : continuationLocksActions ? continuationPlaceholder
                 : !supported ? "Checking message support…" : eligible ? "Queue a message…" : MessageBoxDisabledReason.takenOver.text,
             buttonLabel: "Send", isLocked: !eligible || unsupported,
-            isStopping: isStopping, showsSendNow: supported && task.status == .running, stopAction: stopAction,
+            isStopping: isStopping, showsSendNow: supported && task.status == .running
+                && (chrome != .standalone || (eligible && hasStatusAuthority && !stopping)), stopAction: stopAction,
             allowsDraftEditing: !unsupported && chrome == .standalone && statusReadAvailability == .unread && !task.takenOver
         )
+        messageBoxModel.isRunning = task.status == .running
+        if stopAction != nil {
+            messageBoxModel.stopWithFocusAction = { [weak self] dismissed in
+                self?.presentStandaloneStopConfirmation(onCancelDismissed: dismissed)
+            }
+        }
     }
 
     @discardableResult

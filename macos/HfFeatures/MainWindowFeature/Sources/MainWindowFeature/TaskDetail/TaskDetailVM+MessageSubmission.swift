@@ -50,7 +50,8 @@ extension TaskDetailVM {
     private func submitMessage(_ text: String, now: Bool, acknowledging: UUID?, completion: @escaping (Bool) -> Void) {
         guard isMounted, !messageSendInFlight, !isBusy, messagingSupported == true,
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let task = latestActionTask(), !task.takenOver else { completion(false); return }
+              let task = latestActionTask(), !task.takenOver,
+              chrome != .standalone || !stoppingPresentation(task: task) else { completion(false); return }
         if now {
             let current = chrome == .standalone ? task : useCase.detail(currentTaskID)
             guard task.taskID == currentTaskID, let current, current.taskID == currentTaskID, current.status == .running,
@@ -98,7 +99,8 @@ extension TaskDetailVM {
                     if let task = self.task { prepareContinuation(task: task); recomputeMessageBox(task: task) }
                 }
             }
-            guard isMounted, currentTaskID == id, continuationSession.generation == generation else {
+            guard isMounted, currentTaskID == id, continuationSession.generation == generation,
+                  chrome != .standalone || latestActionTask().map({ !stoppingPresentation(task: $0) && (!now || $0.status == .running) }) == true else {
                 completion(false); return
             }
             do {

@@ -9,6 +9,7 @@ struct TaskStopConfirmation: Identifiable {
     let taskID: String
     let notStoppedTitles: [String]
     let confirm: @MainActor () -> Void
+    var cancelDidDismiss: (@MainActor () -> Void)?
 }
 
 // MARK: - TaskStopConfirmationView
@@ -17,6 +18,7 @@ struct TaskStopConfirmation: Identifiable {
 struct TaskStopConfirmationView: View {
     let confirmation: TaskStopConfirmation
     let onConfirm: () -> Void
+    var onCancel: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @FocusState private var keepRunningFocused: Bool
     @State private var contentHeight: CGFloat = 340
@@ -45,7 +47,7 @@ struct TaskStopConfirmationView: View {
             .frame(height: min(contentHeight, 340))
             HStack(spacing: TaskScreenStyle.Dialog.actionsGap) {
                 Spacer(minLength: 0)
-                Button("Keep running") { dismiss() }
+                Button("Keep running") { onCancel?(); dismiss() }
                     .focused($keepRunningFocused)
                     .keyboardShortcut(.cancelAction)
                 Button("Stop task", role: .destructive) {

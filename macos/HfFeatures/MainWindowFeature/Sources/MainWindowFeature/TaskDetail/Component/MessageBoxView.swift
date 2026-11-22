@@ -79,6 +79,10 @@ struct MessageBoxModel {
 
     /// Allows retaining an editable draft while submission waits for current status authority.
     var allowsDraftEditing = false
+    /// Current standalone running state, independent of messaging capability.
+    var isRunning = false
+    /// Standalone Stop can return focus only after its own cancelled sheet dismisses.
+    var stopWithFocusAction: (@MainActor (@escaping @MainActor () -> Void) -> Void)?
     /// The field's accessibility label when it differs from the placeholder ("Message Codex"). `nil` keeps the placeholder.
     var fieldAccessibilityLabel: String?
     /// The send button's accessibility label when it differs from `buttonLabel` ("Send to Codex").
@@ -92,6 +96,20 @@ struct MessageBoxModel {
         canSend: false, canContinue: false, isBusy: false,
         label: "Messages", hint: "", placeholder: MessageBoxDisabledReason.noSession.text, buttonLabel: "Continue"
     )
+}
+
+// MARK: - MessageBoxTrailingMode
+
+enum MessageBoxTrailingMode: Equatable {
+    case send, stop, stopping
+
+    var title: String {
+        switch self {
+        case .send: "Send"
+        case .stop: "Stop task"
+        case .stopping: "Stopping…"
+        }
+    }
 }
 
 // MARK: - MessageBoxStyle
@@ -142,6 +160,7 @@ struct MessageBoxView: View {
     var wrapperTopInset: CGFloat?
     var selectedTaskInspector = false
     var style: MessageBoxStyle = .standard
+    var isStandalone = false
     /// An external home for the draft; `nil` keeps it in local state.
     var text: Binding<String>?
     /// Typed callers finish only after receipt acceptance. Legacy callers retain Bool semantics.
@@ -152,6 +171,8 @@ struct MessageBoxView: View {
     @State private var localEditRevision: UInt64 = 0
     @State private var isHoveringSend = false
     @FocusState private var fieldFocused: Bool
+    @FocusState private var trailingFocused: Bool
+    @State private var stopFocus = MessageBoxStopFocusHost()
     private var isEnabled: Bool { model.canSend || model.canContinue }
     private var draft: Binding<String> {
         text ?? Binding(get: { localText }, set: { value in
@@ -191,7 +212,7 @@ struct MessageBoxView: View {
 
     @ViewBuilder private var laneField: some View {
         let composer = TaskScreenStyle.Composer.self
-        if model.isLocked {
+        if model.isLocked, !standaloneStopping {
             HStack(spacing: HfRadius.Metrics.spacing8) {
                 Image(systemName: "lock.fill")
                     .foregroundStyle(TaskScreenStyle.Colors.textTertiary.color)
@@ -221,7 +242,7 @@ struct MessageBoxView: View {
                     }
                 }
                 .foregroundStyle(composer.inputColor.color)
-                .disabled(!model.canEditDraft)
+                .disabled(!model.canEditDraft || standaloneStopping)
                 .onSubmit(submit)
                 .frame(minHeight: Self.laneFieldMinHeight)
         }
@@ -277,7 +298,7 @@ struct MessageBoxView: View {
                 .padding(.bottom, composer.paddingBottom)
                 .padding(.leading, composer.paddingLeading)
                 .background { TranscriptComposerSurface() }
-            if isEnabled {
+            if isEnabled, !isStandalone || hasDraft, !standaloneStopping {
                 TranscriptComposerHint(text: model.printedHint)
             }
         }
@@ -288,9 +309,19 @@ struct MessageBoxView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var canSubmit: Bool {
-        isEnabled && !model.isBusy && !draft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    private var hasDraft: Bool { !draft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var standaloneStopping: Bool { isStandalone && model.isStopping }
+    private var usesStandaloneSlot: Bool { isStandalone && style == .transcript && (model.isRunning || model.isStopping) }
+    var trailingMode: MessageBoxTrailingMode {
+        guard usesStandaloneSlot else { return .send }
+        if model.isStopping { return .stopping }
+        if hasDraft, model.canEditDraft, !model.isLocked { return .send }
+        if model.stopAction != nil { return .stop }
+        return .send
     }
+
+    private var canSubmit: Bool { isEnabled && !model.isBusy && hasDraft && !standaloneStopping }
+    private var trailingEnabled: Bool { trailingMode == .stop ? !model.isBusy : trailingMode == .send && canSubmit }
 
     @ViewBuilder private var controls: some View {
         if isCompact {
@@ -325,22 +356,18 @@ struct MessageBoxView: View {
     }
 
     @ViewBuilder private var actionButtons: some View {
-        if style == .transcript, let stopAction = model.stopAction {
+        if style == .transcript, !usesStandaloneSlot, let stopAction = model.stopAction {
             Button(action: stopAction) { Label(model.isStopping ? "Stopping…" : "Stop", systemImage: "stop.fill") }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .disabled(model.isBusy || model.isStopping)
                 .accessibilityIdentifier("task-composer.stop")
         }
-        if model.showsSendNow, let onSubmitNow,
+        if model.showsSendNow, !standaloneStopping, !isStandalone || hasDraft, let onSubmitNow,
            !selectedTaskInspector || !draft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             sendNowButton(onSubmitNow)
         }
-        if !isCompact || fieldFocused {
-            sendButton.keyboardShortcut(.return, modifiers: .command)
-        } else {
-            sendButton
-        }
+        sendButton.keyboardShortcut((!isCompact || fieldFocused) && trailingMode == .send ? KeyboardShortcut(.return, modifiers: .command) : nil)
     }
 
     @ViewBuilder
@@ -381,22 +408,41 @@ struct MessageBoxView: View {
 
     private var transcriptSendButton: some View {
         let composer = TaskScreenStyle.Composer.self
-        let fill = canSubmit
+        let fill = trailingEnabled
             ? (isHoveringSend ? composer.sendHoverFill : composer.sendFill)
             : composer.sendDisabledFill
-        return Button(action: submit) {
-            Image(systemName: "arrow.up")
+        return Button(action: performTrailingAction) {
+            Image(systemName: trailingMode == .send ? "arrow.up" : "stop.fill")
                 .font(.hf(.body, weight: .bold))
-                .foregroundStyle((canSubmit ? composer.sendForeground : composer.sendDisabledForeground).color)
+                .foregroundStyle((trailingEnabled ? composer.sendForeground : composer.sendDisabledForeground).color)
                 .frame(width: composer.sendSize, height: composer.sendSize)
                 .background(Circle().fill(fill.color))
                 .contentShape(Circle())
         }
         .buttonStyle(UndimmedButtonStyle())
-        .disabled(!canSubmit)
+        .disabled(!trailingEnabled)
+        .focused($trailingFocused)
         .onHover { isHoveringSend = $0 }
-        .help("\(model.buttonLabel) (⌘↩)")
-        .accessibilityLabel(model.buttonLabel)
+        .help(trailingMode == .send ? "\(model.buttonLabel) (⌘↩)" : trailingMode.title)
+        .accessibilityLabel(trailingMode == .send ? model.buttonLabel : trailingMode.title)
+        .accessibilityIdentifier("task-composer.trailing-action")
+        .background {
+            if isStandalone {
+                MessageBoxStopFocusAnchor(host: stopFocus, eligible: usesStandaloneSlot && trailingMode == .stop && trailingEnabled)
+            }
+        }
+    }
+
+    private func performTrailingAction() {
+        guard trailingEnabled else { return }
+        if trailingMode == .stop {
+            if let stop = model.stopWithFocusAction {
+                let restore = stopFocus.captureReturn()
+                stop {
+                    if restore() { trailingFocused = true }
+                }
+            } else { model.stopAction?() }
+        } else { submit() }
     }
 
     private var standardSendButton: some View {
@@ -428,7 +474,7 @@ struct MessageBoxView: View {
     @ViewBuilder
     private var transcriptField: some View {
         let composer = TaskScreenStyle.Composer.self
-        if model.isLocked {
+        if model.isLocked, !standaloneStopping {
             HStack(spacing: HfRadius.Metrics.spacing8) {
                 Image(systemName: "lock.fill").accessibilityHidden(true)
                 Text(model.placeholder)
@@ -464,7 +510,7 @@ struct MessageBoxView: View {
                     }
                 }
             .foregroundStyle(composer.inputColor.color)
-            .disabled(!model.canEditDraft)
+            .disabled(!model.canEditDraft || standaloneStopping)
             .onSubmit(submit)
             .padding(.vertical, composer.inputPaddingVertical)
             .frame(minHeight: composer.inputMinHeight)
@@ -473,7 +519,7 @@ struct MessageBoxView: View {
 
     @ViewBuilder
     private var standardField: some View {
-        if model.isLocked {
+        if model.isLocked, !standaloneStopping {
             HStack(spacing: HfRadius.Metrics.spacing8) {
                 Image(systemName: "lock.fill").accessibilityHidden(true)
                 Text(model.placeholder)
@@ -493,7 +539,7 @@ struct MessageBoxView: View {
                 .accessibilityHint(model.hint)
                 .lineLimit(1 ... 6)
                 .textFieldStyle(.plain)
-                .disabled(!model.canEditDraft)
+                .disabled(!model.canEditDraft || standaloneStopping)
                 .onSubmit(submit)
                 .padding(.vertical, HfRadius.Metrics.spacing4)
         }
@@ -520,73 +566,3 @@ struct MessageBoxView: View {
         }
     }
 }
-
-#if DEBUG
-@MainActor
-private func previewStack() -> some View {
-    VStack(spacing: HfRadius.Metrics.spacing8) {
-        MessageBoxView(model: MessageBoxModel(
-            canSend: true, canContinue: false, isBusy: false, label: "Message this task",
-            hint: "Send queues; Send now requests immediate delivery when safe", placeholder: "Queue a message…",
-            buttonLabel: "Send"
-        )) { _ in true }
-        MessageBoxView(model: MessageBoxModel(
-            canSend: true, canContinue: false, isBusy: true, label: "Message this task",
-            hint: "Send queues; Send now requests immediate delivery when safe", placeholder: "Queue a message…",
-            buttonLabel: "Send"
-        )) { _ in true }
-        MessageBoxView(model: MessageBoxModel(
-            canSend: true, canContinue: false, isBusy: false, label: "Message this settled task",
-            hint: "Send queues; Send now starts a continuation when safe", placeholder: "Queue a message…",
-            buttonLabel: "Send"
-        )) { _ in true }
-        MessageBoxView(model: MessageBoxModel(
-            canSend: true, canContinue: false, isBusy: false, label: "Message this task without live input",
-            hint: "Queued for the next continuation", placeholder: "Queue a message…", buttonLabel: "Send"
-        )) { _ in true }
-        MessageBoxView(model: MessageBoxModel(
-            canSend: false, canContinue: false, isBusy: false, label: "Messages", hint: "",
-            placeholder: MessageBoxDisabledReason.takenOver.text, buttonLabel: "Send", isLocked: true
-        )) { _ in true }
-        MessageBoxView(model: .disabled) { _ in true }
-    }
-    .frame(width: HfRadius.Metrics.taskComponentPreviewWidth)
-    .padding(.vertical, HfRadius.Metrics.spacing16)
-    .background(Color.windowBG)
-}
-
-@MainActor
-private func transcriptPreviewStack() -> some View {
-    VStack(spacing: HfRadius.Metrics.spacing8) {
-        MessageBoxView(model: MessageBoxModel(
-            canSend: true, canContinue: false, isBusy: false, label: "Message this task",
-            hint: "Send queues; Send now requests immediate delivery when safe", placeholder: "Queue a message…",
-            buttonLabel: "Send"
-        ), onSubmitNow: { _ in true }, style: .transcript) { _ in true }
-        MessageBoxView(model: MessageBoxModel(
-            canSend: false, canContinue: false, isBusy: false, label: "Messages", hint: "",
-            placeholder: MessageBoxDisabledReason.takenOver.text, buttonLabel: "Send", isLocked: true
-        ), style: .transcript) { _ in true }
-        MessageBoxView(model: .disabled, style: .transcript) { _ in true }
-    }
-    .frame(width: TaskScreenStyle.ComposerWrapper.maxWidth)
-    .padding(.vertical, HfRadius.Metrics.spacing16)
-    .background(TaskScreenStyle.Colors.pageBackground.color)
-}
-
-#Preview("Light") {
-    previewStack().preferredColorScheme(.light)
-}
-
-#Preview("Dark") {
-    previewStack().preferredColorScheme(.dark)
-}
-
-#Preview("Transcript, light") {
-    transcriptPreviewStack().preferredColorScheme(.light)
-}
-
-#Preview("Transcript, dark") {
-    transcriptPreviewStack().preferredColorScheme(.dark)
-}
-#endif

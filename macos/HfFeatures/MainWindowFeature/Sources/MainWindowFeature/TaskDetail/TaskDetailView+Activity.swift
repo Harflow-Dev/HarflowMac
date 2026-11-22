@@ -12,7 +12,7 @@ extension TaskDetailView {
             content
             MessageBoxView(model: viewModel.messageBoxModel, onSubmitNow: viewModel.submitMessageNow,
                            wrapperTopInset: chrome == .builder ? nil : HfRadius.Metrics.spacing4,
-                           style: transcriptStyle.isTranscript ? .transcript : .standard,
+                           style: transcriptStyle.isTranscript ? .transcript : .standard, isStandalone: isStandalone,
                            text: isStandalone ? draftMount?.text : nil,
                            onSubmitCompletion: viewModel.submitMessage,
                            captureDraftClear: draftMount.map { mount in { mount.captureAcceptedDraftClear() } }) { text in viewModel.submitMessage(text) }
