@@ -25,6 +25,24 @@ import Testing
         try await assertViewport(style: style, width: 1000, host: host, window: window)
     }
 
+    @Test func givenPartialReportedCost_whenMounted_thenCardShowsTotalAndPartialCoverage() async {
+        // given
+        let model = CaptureModel()
+        model.presentation.reportedCost = .init(
+            value: "$3.30", coverage: StatisticsProjection.partialReportedCoverage(reported: 2, eligible: 3)
+        )
+        let fixture = RedesignHost(StatisticsView(model), size: CGSize(width: 1000, height: 620), appearance: .light)
+        defer { fixture.close() }
+        let parts = ["$3.30", "From 2 of 3 executions; the rest are left out, not counted as zero"]
+
+        // when
+        await fixture.settle { fixture.cardValue("Reported cost").map { value in parts.allSatisfy { value.contains($0) } } == true }
+
+        // then
+        let value = fixture.cardValue("Reported cost")
+        for part in parts { #expect(value?.contains(part) == true, "Reported cost card lacks \(part): \(value ?? "-")") }
+    }
+
     @Test func givenStaleReadyOverview_whenMounted_thenCardsAppearOnlyOutsideWorkflowDrilldown() async {
         // given
         let model = CaptureModel()

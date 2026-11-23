@@ -236,7 +236,7 @@ Task and workflow primary pages are independent of sidebar pagination. Each
 source permits at most 100 pages, 10,000 received primary records and a cooperative
 30-second deadline, checked before and after each await. Commands retain their
 own bounded timeout. Readiness, authority, count completeness, advancing cursors
-and consistent duplicate identities are required; partial totals are never shown.
+and consistent duplicate identities are required; incomplete history never yields totals.
 Pages are eventually consistent, not a frozen history transaction.
 
 Only exact `running` standalone tasks and non-settling root saved-workflow runs

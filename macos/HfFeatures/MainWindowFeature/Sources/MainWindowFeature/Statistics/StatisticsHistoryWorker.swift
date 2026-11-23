@@ -20,7 +20,7 @@ enum StatisticsHistoryResult: Sendable {
 
 // MARK: - StatisticsHistoryWorker
 
-/// Owns bounded page walking outside the main actor. No partial totals escape this boundary.
+/// Owns bounded page walking outside the main actor. No totals from incomplete history escape this boundary.
 actor StatisticsHistoryWorker {
     static let maxPages = 200
     static let maxFacts = 20000

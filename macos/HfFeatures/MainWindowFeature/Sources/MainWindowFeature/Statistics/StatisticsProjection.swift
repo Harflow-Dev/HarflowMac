@@ -77,8 +77,8 @@ enum StatisticsProjection {
         }
         result.reportedCost = reportedCost(matching, qualified: snapshot.costCoverage != nil)
         for (harness, facts) in Dictionary(grouping: matching, by: requestedHarnessID) {
-            var cost = reportedCost(facts, qualified: snapshot.costCoverage != nil)
-            if harness == unknownHarness { cost.value = "Unavailable" }
+            // An unknown harness never shows a total; its coverage stays the plain line.
+            let cost = reportedCost(facts, qualified: snapshot.costCoverage != nil, withholdTotal: harness == unknownHarness)
             result.perHarnessCosts[harness] = cost
         }
         let queryCalendar = snapshot.calendar ?? calendar
@@ -107,7 +107,9 @@ enum StatisticsProjection {
         return result
     }
 
-    static func reportedCost(_ facts: [StatisticsFact], qualified: Bool) -> StatisticsCostPresentation {
+    static func reportedCost(
+        _ facts: [StatisticsFact], qualified: Bool, withholdTotal: Bool = false
+    ) -> StatisticsCostPresentation {
         guard qualified else { return .init() }
         var amounts: [Double] = []
         var eligible = 0
@@ -120,8 +122,8 @@ enum StatisticsProjection {
             }
         }
         guard eligible > 0 else { return .init(coverage: "No eligible executions") }
-        var result = StatisticsCostPresentation(coverage: "Reported by \(amounts.count) of \(eligible) executions")
-        guard amounts.count == eligible else { return result }
+        var result = StatisticsCostPresentation(coverage: reportedCoverage(reported: amounts.count, eligible: eligible))
+        guard !amounts.isEmpty, !withholdTotal else { return result }
         // Add smaller contributions first with compensation before formatting the final USD total.
         var total = 0.0
         var compensation = 0.0
@@ -142,9 +144,21 @@ enum StatisticsProjection {
             formatter.minimumFractionDigits = 2
             formatter.maximumFractionDigits = 2
             formatter.roundingMode = .halfUp
-            result.value = formatter.string(from: NSNumber(value: total)).map { "$" + $0 } ?? "Unavailable"
+            guard let formatted = formatter.string(from: NSNumber(value: total)) else { return result }
+            result.value = "$" + formatted
         }
+        if amounts.count < eligible { result.coverage = partialReportedCoverage(reported: amounts.count, eligible: eligible) }
         return result
+    }
+
+    /// Coverage line when every eligible execution, or none, reported a cost.
+    static func reportedCoverage(reported: Int, eligible: Int) -> String {
+        "Reported by \(reported) of \(eligible) executions"
+    }
+
+    /// Coverage line shown with a partial total.
+    static func partialReportedCoverage(reported: Int, eligible: Int) -> String {
+        "From \(reported) of \(eligible) executions; the rest are left out, not counted as zero"
     }
 
     static func rankingExecutions(_ facts: [StatisticsFact], list: StatisticsList) -> [StatisticsFact] {

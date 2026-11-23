@@ -15,7 +15,7 @@ seconds, including retries and invalidated results. Definitions are loaded indep
 within the same structured scan so workflow choices remain available while history reads
 continue. There is no per-item detail fanout. Large retained histories can still require
 many CLI processes within those caps; incomplete or over-budget reads show unavailable
-metrics rather than partial totals.
+metrics rather than totals from incomplete history.
 
 ## Activity feed
 

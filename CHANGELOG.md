@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show a partial reported-cost total in Statistics. When only some eligible executions reported a cost, the card shows the sum of those and reads "From X of Y executions; the rest are left out, not counted as zero", instead of "Unavailable". The wording and behaviour are an owner decision replacing the earlier design. A set whose only reported cost is $0 shows $0.00. An unqualified or invalid cost, or a sum that cannot be represented, still shows Unavailable, and an unknown harness never shows a per-harness total.
+
 - Hide the task store's backup, reset and resume actions in Settings → General until the Rust task store design: the review, confirm and cancel controls, the archival warning and the retry hint no longer appear, and the sidebar help text now says "inspect the store". Inspection, the status rows and Show backup in Finder for an earlier receipt stay. The repository, use case and engine `state-recover` path are unchanged.
 
 - Remove the legacy Needs you and task-finished notifiers. Notifications now come only from the engine's durable interaction feed (`interaction-events.v1`), which the paired 0.0.14 runtime provides; an engine without that capability posts no notifications. "Notify when a task finishes" still gates task banners from the feed. The click route for a previously delivered `needs_you_item` notification stays.
