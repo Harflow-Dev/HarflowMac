@@ -56,6 +56,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     public var selection: MonitorDestination? {
         didSet {
             guard selection != oldValue else { return }
+            if let held = heldTaskLink, selection != .task(held) { heldTaskLink = nil }
             if case let .newWorkflow(identity) = selection {
                 if workflowGenerationIntent != identity { workflowGenerationIntent = nil }
             } else { workflowGenerationIntent = nil }
@@ -132,6 +133,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     public private(set) var runtimeIsReady = true
     public private(set) var runtimeSetupState: RuntimeSetupState = .ready
     public private(set) var hasLoadedWork = false
+    public internal(set) var heldTaskLink: String?
     public private(set) var loadingWorkError: LoadingWorkError?
     public internal(set) var mainGate: MainWindowGate?
     /// The latest listing error, kept so the gate follows the runtime and the listing together.
@@ -217,6 +219,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         self.runtimeSubscription = install.setupStatePublisher().receive(on: DispatchQueue.main).sink { [weak self] state in
             guard let self else { return }
             if runtimeIsReady != state.isReady { self.runtimeIsReady = state.isReady }
+            releaseHeldTaskLink(whenRuntimeIs: state)
             if runtimeSetupState != state { self.runtimeSetupState = state }
             refreshMainGate()
             refreshTaskTopBarPreMount()
@@ -241,6 +244,9 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         switch destination {
         case .task(let id):
             selection = destination
+            // A link that arrives while setup is required is remembered; the latest one wins. The selection write
+            // above already dropped a different earlier link.
+            if !runtimeIsReady, heldTaskLink != id { heldTaskLink = id }
             // Covers the URL/notification/menu-bar reveal triggers — `MenuBarCoordinator.select(_:)`
             // and the app target's URL/notification handling both bubble here (see this package's
             // `AGENTS.md`).

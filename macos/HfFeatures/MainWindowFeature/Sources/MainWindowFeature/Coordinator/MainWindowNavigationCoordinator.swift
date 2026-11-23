@@ -34,6 +34,9 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
     var runtimeIsReady: Bool { get }
     var runtimeSetupState: RuntimeSetupState { get }
     func performRuntimeSetup()
+    /// The task a `harflow://task/<id>` link named while the runtime was not ready. The gate says it opens after setup;
+    /// the selection already points at it. Cleared when the runtime becomes ready or the selection moves elsewhere.
+    var heldTaskLink: String? { get }
     /// First public listing readiness is independent of managed-runtime qualification.
     var hasLoadedWork: Bool { get }
     /// The current listing failure, for the first-listing gate; carries the refusal code separately from the message.
@@ -110,6 +113,7 @@ public extension MainWindowNavigationCoordinator {
     var runtimeIsReady: Bool { true }
     var runtimeSetupState: RuntimeSetupState { runtimeIsReady ? .ready : .checking }
     func performRuntimeSetup() {}
+    var heldTaskLink: String? { nil }
     var hasLoadedWork: Bool { true }
     var loadingWorkError: LoadingWorkError? { nil }
     var mainGate: MainWindowGate? { nil }

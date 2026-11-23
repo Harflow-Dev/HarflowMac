@@ -28,6 +28,7 @@ final class MainWindowNavigationCoordinatorMock: MainWindowNavigationCoordinator
     
     var selection: MonitorDestination?
     var runtimeIsReady: Bool
+    var heldTaskLink: String?
     var hasLoadedWork = true
     var loadingWorkError: LoadingWorkError?
     var mainGate: MainWindowGate? {

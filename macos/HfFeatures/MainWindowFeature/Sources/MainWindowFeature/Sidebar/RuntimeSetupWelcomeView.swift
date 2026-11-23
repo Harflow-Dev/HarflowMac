@@ -10,7 +10,12 @@ import SwiftUI
 /// `harness-runtime`, pin 5b37a3d).
 struct RuntimeSetupWelcomeView: View {
     var state: RuntimeSetupState = .installationRequired(installedVersion: nil, requiredVersion: HarflowVersion.current)
+    /// A task link is waiting for the runtime; the gate then tells the person it opens after setup.
+    var holdsTaskLink = false
     var action: () -> Void = {}
+
+    /// Design wording of the held-link status line (`harness-runtime/deep-link-held`, HarflowDesign e1c9230).
+    nonisolated static let heldTaskLinkStatus = "After setup, Harflow opens the task you linked to."
 
     var body: some View {
         RuntimeGateView(title: title, bodyText: bodyCopy, statusText: statusText, statusIsFailure: isFailure,
@@ -29,12 +34,18 @@ struct RuntimeSetupWelcomeView: View {
         }
     }
 
-    private var statusText: String? {
+    private var statusText: String? { Self.statusText(for: state, holdsTaskLink: holdsTaskLink) }
+
+    /// The gate's status line. The held-link line shows only where the status line is otherwise empty: while checking,
+    /// when installation is required and when an update is required. Installing, updating and the failures keep
+    /// their own status.
+    nonisolated static func statusText(for state: RuntimeSetupState, holdsTaskLink: Bool) -> String? {
         switch state {
         case .installing: "Installation in progress"
         case .updating: "Update in progress"
         case .failed(let message), .updateFailed(let message, _, _): message
-        default: nil
+        case .checking, .installationRequired: holdsTaskLink ? heldTaskLinkStatus : nil
+        case .ready: nil
         }
     }
 

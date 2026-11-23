@@ -29,6 +29,7 @@ final class FakeMainWindowNavigationCoordinator: MainWindowNavigationCoordinator
     /// fake, where an extension-only member would resolve to the default.
     var runtimeIsReady = true
     var workIsAvailable = true
+    var heldTaskLink: String?
     let topBar = TaskTopBarHolder()
 
     /// Every `MonitorDestination` this fake was asked to `handle(path:)`, in order — so a test can

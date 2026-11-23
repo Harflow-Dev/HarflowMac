@@ -1,3 +1,4 @@
+import HfRepository
 import MonitorCore
 
 // MARK: - Main-pane gates
@@ -13,5 +14,11 @@ extension MainWindowCoordinator {
         mainGate = gate
         // A runner left open when the gate arrives would let a launch through.
         if gate != nil, presentedSheet == .workflowRunner { presentedSheet = nil }
+    }
+
+    /// Drops the held task link once the runtime is ready. The selection stays on the linked task, so the detail
+    /// opens as the gate lifts.
+    func releaseHeldTaskLink(whenRuntimeIs state: RuntimeSetupState) {
+        if state.isReady, heldTaskLink != nil { heldTaskLink = nil }
     }
 }

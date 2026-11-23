@@ -76,6 +76,7 @@ import Testing
 
         given(useCase).connectionLine.willReturn(connectionLine)
         given(useCase).listError.willReturn(nil)
+        given(useCase).hasListed.willReturn(false)
         given(useCase).tasksPublisher().willReturn(tasksSubject.eraseToAnyPublisher())
         given(useCase).listErrorPublisher().willReturn(listErrorSubject.eraseToAnyPublisher())
         given(useCase).hasListedPublisher().willReturn(hasListedSubject.eraseToAnyPublisher())

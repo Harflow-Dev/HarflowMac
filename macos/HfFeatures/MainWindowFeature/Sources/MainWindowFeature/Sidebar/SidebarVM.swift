@@ -259,7 +259,7 @@ final class SidebarVM: SidebarViewModel {
     private(set) var showsSetupGate = false
     /// Written on change only: the task store gate is up, so creation is blocked while the populated sidebar stays.
     private(set) var storeBlocksCreation = false
-    var creationIsAvailable: Bool { !showsSetupGate && !storeBlocksCreation }
+    var creationIsAvailable: Bool { runtimeSetupState.isReady && !showsSetupGate && !storeBlocksCreation }
     @ObservationIgnored private var renderedShowsRefreshNote = false
     var showsRefreshNote: Bool {
         get { access(keyPath: \.showsRefreshNote); return renderedShowsRefreshNote }
@@ -304,7 +304,8 @@ final class SidebarVM: SidebarViewModel {
         let initialSetupState = (useCase as? any RuntimeSetupObserving)?.runtimeSetupState ?? .ready
         self.runtimeSetupState = initialSetupState
         self.latestListError = useCase.listError
-        self.showsSetupGate = !initialSetupState.isReady || MainWindowGate.owns(useCase.listError)
+        self.latestHasListed = useCase.hasListed
+        self.showsSetupGate = SidebarSetupGate.applies(setupState: initialSetupState, hasListed: latestHasListed, listError: latestListError)
         self.latestCatalog = useCase.backendCatalog
         if let recovery = useCase as? any SidebarStoreRecoveryObserving { applyStoreRecovery(recovery.storeRecoveryState) }
         recomputeBackendTabs()
@@ -399,9 +400,8 @@ final class SidebarVM: SidebarViewModel {
         refreshSetupGate()
     }
 
-    /// The setup line shows while the runtime is not ready or a contract or capability gate owns the listing error.
     func refreshSetupGate() {
-        let next = !runtimeSetupState.isReady || MainWindowGate.owns(latestListError)
+        let next = SidebarSetupGate.applies(setupState: runtimeSetupState, hasListed: latestHasListed, listError: latestListError)
         if showsSetupGate != next { showsSetupGate = next }
     }
 

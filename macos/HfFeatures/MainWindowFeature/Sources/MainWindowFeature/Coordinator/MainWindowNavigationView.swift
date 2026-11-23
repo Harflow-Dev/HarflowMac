@@ -97,7 +97,8 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
 
     @ViewBuilder private var detail: some View {
         if !coordinator.runtimeIsReady {
-            RuntimeSetupWelcomeView(state: coordinator.runtimeSetupState, action: coordinator.performRuntimeSetup)
+            RuntimeSetupWelcomeView(state: coordinator.runtimeSetupState, holdsTaskLink: coordinator.heldTaskLink != nil,
+                                    action: coordinator.performRuntimeSetup)
         } else if let gate = coordinator.mainGate {
             MainWindowGateView(gate: gate, retry: coordinator.retryLoadingWork)
         } else {

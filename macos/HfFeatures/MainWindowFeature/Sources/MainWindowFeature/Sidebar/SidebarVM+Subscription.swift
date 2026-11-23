@@ -52,6 +52,7 @@ extension SidebarVM {
                 guard let self else { return }
                 latestHasListed = hasListed
                 refreshListErrorPresentation()
+                refreshSetupGate()
                 recompute()
             }
             .store(in: &cancellables)

@@ -154,6 +154,13 @@ public final class AppCoordinator: ParentCoordinator, WindowPresenting, LaunchUR
     public func handle(url: URL) -> Bool {
         guard let id = MonitorURL.taskID(from: url) else { return false }
         guard !isMainWindowVisible() else {
+            // A visible window that shows the runtime setup gate has no list to refresh (the listing is refused until
+            // the runtime is ready) and nothing arranged to disturb: the link is selected and held without
+            // activating, re-ordering or refreshing, and opens once setup completes.
+            if mainWindowNavigationCoordinator?.runtimeIsReady == false {
+                mainWindowCoordinator.handle(path: MonitorDestination.task(id))
+                return true
+            }
             // The window is already on screen: only refresh the list so the new task appears in
             // it. Selecting it, revealing it in the sidebar, activating the app, or re-opening the
             // window would disturb a window the user already has arranged — exactly what made it

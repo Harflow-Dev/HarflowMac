@@ -315,6 +315,59 @@ import Testing
         #expect(openerCallCount == 0)
     }
 
+    // MARK: - handle(url:), main window visible while runtime setup is required
+
+    @Test func givenAURLAndAVisibleWindowThatShowsTheSetupGate_whenHandled_thenTheLinkIsSelectedWithoutRefreshOrActivation() async {
+        // given
+        let activateLog = LockedBox<[String]>([])
+        let refreshCalled = LockedBox(false)
+        var openerCallCount = 0
+        let (sut, fakeMainWindow, _, _) = makeSUT(
+            openWindowOnStart: true, mainWindowVisible: true, refreshCalled: refreshCalled, activateLog: activateLog
+        )
+        sut.registerWindowOpener { openerCallCount += 1 }
+        fakeMainWindow.runtimeIsReady = false
+
+        // when
+        let handled = sut.handle(url: URL(string: "harflow://task/abc123")!)
+        try? await Task.sleep(for: .milliseconds(100))
+
+        // then
+        #expect(handled)
+        #expect(fakeMainWindow.handledDestinations == [.task("abc123")])
+        #expect(fakeMainWindow.selection == .task("abc123"))
+        #expect(!refreshCalled.value)
+        #expect(activateLog.value.isEmpty)
+        #expect(openerCallCount == 0)
+    }
+
+    @Test func givenAnInvalidURLAndAVisibleWindowThatShowsTheSetupGate_whenHandled_thenItIsIgnored() {
+        // given
+        let (sut, fakeMainWindow, _, _) = makeSUT(mainWindowVisible: true)
+        fakeMainWindow.runtimeIsReady = false
+
+        // when
+        let handled = sut.handle(url: URL(string: "harflow://task/bad%20id")!)
+
+        // then
+        #expect(!handled)
+        #expect(fakeMainWindow.handledDestinations.isEmpty)
+    }
+
+    @Test func givenAURLAndAHiddenWindowWhileSetupIsRequired_whenHandled_thenTheLinkIsSelectedAndTheWindowOpensAsBefore() {
+        // given
+        let activateLog = LockedBox<[String]>([])
+        let (sut, fakeMainWindow, _, _) = makeSUT(openWindowOnStart: true, mainWindowVisible: false, activateLog: activateLog)
+        fakeMainWindow.runtimeIsReady = false
+
+        // when
+        sut.handleLaunchURL(URL(string: "harflow://task/abc123")!)
+
+        // then
+        #expect(fakeMainWindow.selection == .task("abc123"))
+        #expect(activateLog.value == ["activate"])
+    }
+
     // MARK: - handle(path:) is unaffected by window visibility (notification-click path)
 
     @Test func givenTheLaunchURL_whenSwiftUIsInitialWindowIsAlreadyVisible_thenTheTaskIsStillSelected() {

@@ -116,6 +116,7 @@ extension SidebarVMTests {
         given(useCase).connectionLine.willReturn("connecting…")
         given(useCase).backendCatalog.willReturn(.empty)
         given(useCase).listError.willReturn(givenContractError())
+        given(useCase).hasListed.willReturn(false)
         stubAppearance(useCase)
         given(routing).selection.willReturn(nil)
         given(routing).retryLoadingWork().willReturn()
@@ -123,6 +124,96 @@ extension SidebarVMTests {
         let sut = SidebarVM(useCase: useCase, routing: routing, visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         // then
         #expect(sut.showsSetupGate)
+    }
+
+    // MARK: - Update failed
+
+    func givenUpdateFailed() -> RuntimeSetupState {
+        .updateFailed(message: "Package verification failed.", installedVersion: "0.0.13", requiredVersion: "0.0.14")
+    }
+
+    @Test func givenAFailedUpdateAndNothingListed_whenObserved_thenTheSetupLineShowsAndCreationIsBlocked() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        sut.didAppear()
+        // when
+        sut.applyRuntimeSetup(givenUpdateFailed())
+        // then
+        #expect(sut.showsSetupGate)
+        #expect(!sut.creationIsAvailable)
+    }
+
+    @Test func givenAFailedUpdateAndAListing_whenObserved_thenThePopulatedSidebarStaysWithCreationBlocked() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        sut.didAppear()
+        harness.hasListedSubject.send(true)
+        await waitUntil { sut.latestHasListed }
+        // when
+        sut.applyRuntimeSetup(givenUpdateFailed())
+        sut.didTapNewSession()
+        sut.didTapNewWorkflow()
+        sut.didSelect(.newSession)
+        sut.didSelect(.task("abc123"))
+        // then
+        #expect(!sut.showsSetupGate)
+        #expect(!sut.creationIsAvailable)
+        verify(harness.routing).openNewSession().called(0)
+        verify(harness.routing).select(.value(.newSession)).called(0)
+        verify(harness.routing).select(.value(.task("abc123"))).called(1)
+    }
+
+    @Test func givenAFailedUpdateWithAListing_whenTheListingIsLostOrSetupBecomesReady_thenTheGateFollows() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        sut.didAppear()
+        harness.hasListedSubject.send(true)
+        await waitUntil { sut.latestHasListed }
+        sut.applyRuntimeSetup(givenUpdateFailed())
+        #expect(!sut.showsSetupGate)
+        // when
+        sut.applyRuntimeSetup(.installing)
+        // then
+        #expect(sut.showsSetupGate)
+        // when
+        sut.applyRuntimeSetup(givenUpdateFailed())
+        sut.applyRuntimeSetup(.ready)
+        // then
+        #expect(!sut.showsSetupGate)
+        #expect(sut.creationIsAvailable)
+    }
+
+    @Test func givenAFailedUpdateWithAListing_whenAContractGateOwnsTheListingError_thenTheSetupLineShows() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        sut.didAppear()
+        harness.hasListedSubject.send(true)
+        await waitUntil { sut.latestHasListed }
+        sut.applyRuntimeSetup(givenUpdateFailed())
+        #expect(!sut.showsSetupGate)
+        // when
+        harness.listErrorSubject.send(givenContractError())
+        await waitUntil { sut.showsSetupGate }
+        // then
+        #expect(!sut.creationIsAvailable)
+    }
+
+    @Test func givenAFailedUpdateWithoutAListing_whenTheFirstListingArrives_thenThePopulatedSidebarShows() async {
+        // given
+        let harness = makeSUT()
+        let sut = harness.sut
+        sut.didAppear()
+        sut.applyRuntimeSetup(givenUpdateFailed())
+        #expect(sut.showsSetupGate)
+        // when
+        harness.hasListedSubject.send(true)
+        await waitUntil { !sut.showsSetupGate }
+        // then
+        #expect(!sut.creationIsAvailable)
     }
 
     // MARK: - Task store gate (the sidebar body stays; creation is blocked)
