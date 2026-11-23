@@ -29,6 +29,9 @@ protocol SidebarViewModel: ViewModel {
     /// the listing is refused by a contract or capability gate. Declared here, not only in an extension, because the
     /// views are generic over their view model and an extension-only member would dispatch to the default.
     var showsSetupGate: Bool { get }
+    /// Whether New task and the workflow creation and library rows act: false under the setup line and under the task
+    /// store gate, which keeps the populated sidebar. A requirement, for the same reason as `showsSetupGate`.
+    var creationIsAvailable: Bool { get }
     func didTapRuntimeSetup()
     var sections: [SidebarSection] { get }
     var taskHistoryState: HistoryLoadingState { get }
@@ -81,6 +84,7 @@ extension SidebarViewModel {
     var storeNeedsAttention: Bool { false }
     var runtimeSetupState: RuntimeSetupState { .ready }
     var showsSetupGate: Bool { !runtimeSetupState.isReady }
+    var creationIsAvailable: Bool { !showsSetupGate }
     func didTapRuntimeSetup() {}
     var appAppearance: AppAppearance { .system }
     func didSelectAppearance(_: AppAppearance) {}
@@ -242,7 +246,8 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 historyToken: historyLayoutToken,
                 transitionEpoch: transitionEpoch,
                 needsYouBadge: viewModel.needsYouBadge,
-                role: .unified
+                role: .unified,
+                creationAvailable: viewModel.creationIsAvailable
             ),
             selection: viewModel.selection,
             seenIDs: seenRowIDs,

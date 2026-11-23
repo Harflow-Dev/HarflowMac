@@ -24,6 +24,8 @@ struct SidebarListPresentation: Equatable, Sendable {
     /// Explicit render role: production scrolls `.unified` (navigation, Running and Recent work in
     /// one bounded outline); `.combined`, `.running` and `.recent` remain the legacy fixture roles.
     var role: Role = .combined
+    /// False while the task store gate blocks creation: the New task and Workflows rows are drawn dimmed and cannot be selected.
+    var creationAvailable = true
 }
 
 struct SidebarListEntry: Identifiable, Equatable, Sendable {
@@ -65,7 +67,7 @@ struct SidebarListEntry: Identifiable, Equatable, Sendable {
     var destination: MonitorDestination? {
         guard !isFading else { return nil }
         switch content {
-        case .navigation(let navigation): return navigation.destination
+        case .navigation(let navigation): return navigation.isEnabled ? navigation.destination : nil
         case .needsYou: return .needsYou(itemID: nil)
         case .statistics: return .statistics
         case .resourceSlots: return .resourceSlots
@@ -97,16 +99,18 @@ struct SidebarNavigationEntry: Equatable, Sendable {
     let destination: MonitorDestination
     var badge: NeedsYouBadge = .none
     var shortcut: String?
+    /// A disabled row is dimmed and is not a selectable destination.
+    var isEnabled = true
 
     /// The unified scroll's navigation order: New task, Needs you, Workflows, Resources, Statistics, Pending launches.
-    static func unifiedEntries(badge: NeedsYouBadge) -> [SidebarNavigationEntry] {
+    static func unifiedEntries(badge: NeedsYouBadge, creationAvailable: Bool = true) -> [SidebarNavigationEntry] {
         [
             .init(id: "navigation:new-task", title: "New task", artwork: .plus,
-                  destination: .newSession, shortcut: "⌘N"),
+                  destination: .newSession, shortcut: "⌘N", isEnabled: creationAvailable),
             .init(id: "navigation:needs-you", title: "Needs you", artwork: .hand,
                   destination: .needsYou(itemID: nil), badge: badge),
             .init(id: "navigation:workflows", title: "Workflows", artwork: .workflow,
-                  destination: .workflowLibrary),
+                  destination: .workflowLibrary, isEnabled: creationAvailable),
             .init(id: "navigation:resources", title: "Resources", artwork: .gauge,
                   destination: .resourceSlots),
             .init(id: "navigation:statistics", title: "Statistics", artwork: .chart,

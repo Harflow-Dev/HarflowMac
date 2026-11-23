@@ -210,7 +210,7 @@ Parallel lane sizing follows the approved v2 lane frames ([HarflowDesign `293468
 
 The ready runtime's unselected detail pane follows HarflowDesign `62b9675`,
 `scripts/start-screen.js` and `styles/start-screen.css`, states `tasks/start` and
-`tasks/start-no-workflows`. Runtime setup retains its existing welcome view, and a runtime that does not match the app replaces the pane with a contract or capability gate (`MainWindowGate`, see `docs/managed-runtime.md`).
+`tasks/start-no-workflows`. Runtime setup retains its existing welcome view, and a runtime that does not match the app replaces the pane with a contract or capability gate, and a task store that refuses work replaces it with the store gate (`MainWindowGate`, see `docs/managed-runtime.md`).
 The coordinator retains one `StartScreenVM` across selection changes so its
 monotonic refresh throttle survives rebuilt views. The VM owns visibility,
 subscriptions and one bounded history scan; an

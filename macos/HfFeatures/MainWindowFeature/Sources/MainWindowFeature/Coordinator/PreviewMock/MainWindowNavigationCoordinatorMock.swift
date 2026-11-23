@@ -31,7 +31,10 @@ final class MainWindowNavigationCoordinatorMock: MainWindowNavigationCoordinator
     var hasLoadedWork = true
     var loadingWorkError: LoadingWorkError?
     var mainGate: MainWindowGate? {
-        didSet { sidebarViewModel.forcesSetupGate = mainGate != nil }
+        didSet {
+            sidebarViewModel.forcesSetupGate = mainGate?.givesSidebarToSetupLine == true
+            sidebarViewModel.forcesCreationBlocked = mainGate != nil
+        }
     }
 
     var listingRetryCount = 0

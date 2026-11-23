@@ -39,6 +39,7 @@ struct SidebarNavigationRow: View {
         .font(.hf(.body))
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, minHeight: max(Self.normalRowHeight, minimumHeight), alignment: .leading)
+        .opacity(navigation.isEnabled ? 1 : 0.4)
         .accessibilityIdentifier("sidebar-navigation-\(navigation.title)")
         .accessibilityLabel(accessibilityLabel)
     }

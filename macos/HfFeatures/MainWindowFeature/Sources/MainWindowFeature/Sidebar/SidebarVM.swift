@@ -257,6 +257,9 @@ final class SidebarVM: SidebarViewModel {
     private(set) var runtimeSetupState: RuntimeSetupState = .ready
     /// Written on change only; see `refreshSetupGate()`.
     private(set) var showsSetupGate = false
+    /// Written on change only: the task store gate is up, so creation is blocked while the populated sidebar stays.
+    private(set) var storeBlocksCreation = false
+    var creationIsAvailable: Bool { !showsSetupGate && !storeBlocksCreation }
 
     /// Tasks the person has collapsed in the sidebar's tree — expanded by default (Design point 3).
     /// Lives for the app's lifetime (this VM is cached across window close/reopen); never mutated by
@@ -348,6 +351,9 @@ final class SidebarVM: SidebarViewModel {
     }
 
     func didSelect(_ destination: MonitorDestination?) {
+        // Creation destinations select nothing while creation is blocked, so the sidebar never highlights a page the
+        // coordinator refuses to show.
+        if !creationIsAvailable, Self.isCreation(destination) { return }
         selectionRevision += 1
         desiredSelection = destination
         // A List binding must acknowledge its interaction synchronously. Reuse the settled
@@ -372,6 +378,9 @@ final class SidebarVM: SidebarViewModel {
         default: true
         }
         if storeNeedsAttention != attention { storeNeedsAttention = attention }
+        // The same rule as the coordinator's store gate, which blocks creation without taking the sidebar body.
+        let blocks = MainWindowGate.classify(runtimeReady: true, listError: nil, storeState: state) != nil
+        if storeBlocksCreation != blocks { storeBlocksCreation = blocks }
     }
 
     func applyRuntimeSetup(_ state: RuntimeSetupState) {
@@ -390,8 +399,15 @@ final class SidebarVM: SidebarViewModel {
         Task { await setup.installRuntime() }
     }
 
+    private static func isCreation(_ destination: MonitorDestination?) -> Bool {
+        switch destination {
+        case .newSession, .newWorkflow, .workflow, .workflowLibrary: true
+        default: false
+        }
+    }
+
     func didTapNewSession() {
-        guard !showsSetupGate else { return }
+        guard creationIsAvailable else { return }
         routing.openNewSession()
     }
 

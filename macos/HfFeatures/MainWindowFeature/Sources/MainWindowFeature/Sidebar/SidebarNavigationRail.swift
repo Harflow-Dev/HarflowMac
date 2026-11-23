@@ -27,7 +27,7 @@ struct SidebarNavigationRail<VM: SidebarViewModel>: View {
                 .accessibilityLabel("Expand sidebar")
                 .accessibilityIdentifier("m04-expand-sidebar")
             Divider().padding(.horizontal, 8)
-            navigation("New task", icon: .plus, destination: .newSession, action: viewModel.didTapNewSession)
+            navigation("New task", icon: .plus, destination: .newSession, creates: true, action: viewModel.didTapNewSession)
             navigation("Needs you", icon: .hand, destination: .needsYou(itemID: nil)) {
                 viewModel.didSelect(.needsYou(itemID: nil))
             }
@@ -37,7 +37,7 @@ struct SidebarNavigationRail<VM: SidebarViewModel>: View {
                 }
             }
             .accessibilityLabel(viewModel.needsYouBadge.accessibilityLabel)
-            navigation("Workflows", icon: .workflow, destination: .workflowLibrary) {
+            navigation("Workflows", icon: .workflow, destination: .workflowLibrary, creates: true) {
                 viewModel.didSelect(.workflowLibrary)
             }
             navigation("Resources", icon: .gauge, destination: .resourceSlots) {
@@ -94,7 +94,7 @@ struct SidebarNavigationRail<VM: SidebarViewModel>: View {
     }
 
     private func navigation(_ title: String, icon: SidebarNavigationArtwork, destination: MonitorDestination,
-                            action: @escaping () -> Void) -> some View {
+                            creates: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label { Text(title) } icon: { SidebarNavigationIcon(icon, size: 18) }
         }
@@ -104,7 +104,7 @@ struct SidebarNavigationRail<VM: SidebarViewModel>: View {
             .help(title)
             .accessibilityLabel(title)
             .accessibilityAddTraits(viewModel.selection == destination ? .isSelected : [])
-            .disabled(viewModel.showsSetupGate)
+            .disabled(viewModel.showsSetupGate || (creates && !viewModel.creationIsAvailable))
     }
 }
 

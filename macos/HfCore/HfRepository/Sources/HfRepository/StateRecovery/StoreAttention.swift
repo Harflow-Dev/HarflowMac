@@ -14,6 +14,14 @@ public struct StoreAttention: Equatable, Sendable {
     /// The refusal code. Present only when the refusal carries no engine reason, so the code is kept on a detail line.
     public let code: String?
 
+    private init(title: String, message: String, stateRoot: String?, reason: String?, code: String?) {
+        self.title = title
+        self.message = message
+        self.stateRoot = stateRoot
+        self.reason = reason
+        self.code = code
+    }
+
     public init(error: ToolError) {
         let reason = error.stateRecoveryReason?.rawValue
         self.title = Self.title(forReason: reason)
@@ -26,6 +34,20 @@ public struct StoreAttention: Equatable, Sendable {
     /// The attention for a store refusal; `nil` for any other error.
     public static func from(refusal error: ToolError) -> StoreAttention? {
         error.isStateRecoveryRefusal ? StoreAttention(error: error) : nil
+    }
+
+    /// The attention for a store inspection that reports a store this app cannot use: an incompatible or an interrupted
+    /// store. `nil` for a ready or missing store (the store is not refusing work). The title follows the inspection's
+    /// status, as the Settings row does; the reason is the engine's and the code is never present.
+    public static func from(inspection: StateInspection) -> StoreAttention? {
+        let title: String
+        switch inspection.status {
+        case .ready, .missing: return nil
+        case .incompatible: title = "Task store needs attention"
+        case .interrupted: title = "Recovery was interrupted"
+        }
+        return StoreAttention(title: title, message: inspection.message, stateRoot: inspection.stateRoot,
+                              reason: inspection.reason.rawValue, code: nil)
     }
 
     /// Whether the refusal reports an interrupted recovery.

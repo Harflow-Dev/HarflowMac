@@ -44,6 +44,9 @@ final class SidebarViewModelMock: SidebarViewModel {
     var forcesSetupGate = false
     var showsSetupGate: Bool { !runtimeSetupState.isReady || forcesSetupGate }
     var storeNeedsAttention = false
+    /// Preview and test input: the task store gate blocks creation although the sidebar body shows.
+    var forcesCreationBlocked = false
+    var creationIsAvailable: Bool { !showsSetupGate && !forcesCreationBlocked }
     var runtimeSetupTapCount = 0
     var newSessionTapCount = 0
     var loadOlderTasksTapCount = 0

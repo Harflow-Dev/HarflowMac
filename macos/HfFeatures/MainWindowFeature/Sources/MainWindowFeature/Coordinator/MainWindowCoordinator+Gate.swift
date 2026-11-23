@@ -8,7 +8,7 @@ extension MainWindowCoordinator {
 
     /// Writes the gate only when it changes, so a repeated listing failure does not republish.
     func refreshMainGate() {
-        let gate = MainWindowGate.classify(runtimeReady: runtimeIsReady, listError: latestListError)
+        let gate = MainWindowGate.classify(runtimeReady: runtimeIsReady, listError: latestListError, storeState: latestStoreState)
         guard mainGate != gate else { return }
         mainGate = gate
         // A runner left open when the gate arrives would let a launch through.

@@ -27,7 +27,17 @@ struct RuntimeGateView: View {
     /// Detail lines drawn between the body and the status. Empty for the setup and listing gates.
     var detailRows: [RuntimeGateDetailRow] = []
     var actionTitle: String?
+    /// Draws the action as a link that opens the Settings window instead of calling `action`.
+    var actionOpensSettings = false
     var action: () -> Void = {}
+
+    @ViewBuilder private func actionControl(_ title: String) -> some View {
+        if actionOpensSettings {
+            SettingsLink { Text(title) }
+        } else {
+            Button(title, action: action)
+        }
+    }
 
     private static let titleText = TaskScreenStyle.TextSpec(size: 26, lineHeight: 32)
     private static let bodyTextSpec = TaskScreenStyle.TextSpec(size: 14, lineHeight: 22)
@@ -73,7 +83,7 @@ struct RuntimeGateView: View {
                         .accessibilityIdentifier(statusIsFailure ? "runtimeSetup.error" : "runtimeSetup.status")
                 }
                 if let actionTitle {
-                    Button(actionTitle, action: action)
+                    actionControl(actionTitle)
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                         .accessibilityIdentifier("runtimeSetup.action")

@@ -136,6 +136,9 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     public internal(set) var mainGate: MainWindowGate?
     /// The latest listing error, kept so the gate follows the runtime and the listing together.
     @ObservationIgnored var latestListError: ToolError?
+    /// The latest shared store state, so the store gate follows the store, the listing and the runtime together.
+    @ObservationIgnored var latestStoreState: StoreRecoveryState = .idle
+    @ObservationIgnored private var storeSubscription: AnyCancellable?
     @ObservationIgnored private var runtimeSubscription: AnyCancellable?
     @ObservationIgnored private var listingSubscription: AnyCancellable?
     @ObservationIgnored private var listingChangeSubscription: AnyCancellable?
@@ -164,6 +167,8 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     /// Read to normalise a task id to its conversation (`normalisedConversationID(for:)`, the task view's `.id()` key
     /// and the top bar's shown conversation) and by the group presenter — never to drive any other behaviour.
     @ObservationIgnored @GlobalEnvironment(\.taskListRepository) var taskListRepository
+    /// The same store state the sidebar's store link observes; it drives the store gate.
+    @ObservationIgnored @GlobalEnvironment(\.stateRecoveryRepository) private var stateRecoveryRepository
 
     // MARK: - Init
 
@@ -171,12 +176,14 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         parent: any Coordinator,
         pasteboard: any PasteboardWriting = NSPasteboard.general,
         installRepository: (any InstallRepository)? = nil,
-        taskListRepository: (any TaskListRepository)? = nil
+        taskListRepository: (any TaskListRepository)? = nil,
+        stateRecoveryRepository: (any StateRecoveryRepository)? = nil
     ) {
         self.parent = parent
         self.pasteboard = pasteboard
         self.installRepository = installRepository ?? GlobalValues.installRepository
         if let taskListRepository { self.taskListRepository = taskListRepository }
+        if let stateRecoveryRepository { self.stateRecoveryRepository = stateRecoveryRepository }
         let listing = self.taskListRepository
         self.listingChangeSubscription = listing.tasksPublisher()
             .receive(on: DispatchQueue.main)
@@ -200,7 +207,13 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         let install = self.installRepository
         self.runtimeIsReady = install.setupState.isReady
         self.runtimeSetupState = install.setupState
-        self.mainGate = MainWindowGate.classify(runtimeReady: runtimeIsReady, listError: latestListError)
+        self.latestStoreState = self.stateRecoveryRepository.state
+        self.mainGate = MainWindowGate.classify(runtimeReady: runtimeIsReady, listError: latestListError, storeState: latestStoreState)
+        self.storeSubscription = self.stateRecoveryRepository.statePublisher().receive(on: DispatchQueue.main).sink { [weak self] state in
+            guard let self else { return }
+            self.latestStoreState = state
+            refreshMainGate()
+        }
         self.runtimeSubscription = install.setupStatePublisher().receive(on: DispatchQueue.main).sink { [weak self] state in
             guard let self else { return }
             if runtimeIsReady != state.isReady { self.runtimeIsReady = state.isReady }
@@ -431,7 +444,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         return vm
     }
 
-    private func sharedSidebarVM() -> SidebarVM {
+    func sharedSidebarVM() -> SidebarVM {
         if let sidebarVM { return sidebarVM }
         let useCase = SidebarViewRepository()
         let newVM = SidebarVM(
@@ -481,38 +494,6 @@ extension MainWindowCoordinator: SidebarRouting {
     func consumeReveal(requestID: UUID) {
         guard pendingReveal?.requestID == requestID else { return }
         pendingReveal = nil
-    }
-}
-
-// MARK: - NewSessionRouting
-
-extension MainWindowCoordinator: NewSessionRouting {
-    /// `NSOpenPanel` is AppKit, which is allowed here (the coordinator, in the feature layer) —
-    /// just not in `NewSessionVM`, which only calls `routing.chooseDirectory()` and awaits the
-    /// result. Modal, exactly like the old `NewSessionSheet.choose()`.
-    public func chooseDirectory() async -> String? {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        guard panel.runModal() == .OK else { return nil }
-        return panel.url?.path
-    }
-    
-    public func didStart(taskID: String) {
-        selection = .task(taskID)
-    }
-
-    public func reviewRecent() {
-        // Only navigate to a task actually observed through the public listing.
-        if let task = taskListRepository.tasks.max(by: { ($0.startedAt ?? .distantPast) < ($1.startedAt ?? .distantPast) }) {
-            selectTask(task.taskID)
-        }
-        sharedSidebarVM().didTapLoadMoreTasks()
-    }
-
-    public func dismiss() {
-        isNewSessionPresented = false
     }
 }
 

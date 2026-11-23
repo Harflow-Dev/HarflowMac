@@ -184,7 +184,7 @@ enum SidebarListReconciler {
             }
         }
         if input.role == .unified {
-            entries += SidebarNavigationEntry.unifiedEntries(badge: input.needsYouBadge).map {
+            entries += SidebarNavigationEntry.unifiedEntries(badge: input.needsYouBadge, creationAvailable: input.creationAvailable).map {
                 .init(id: $0.id, content: .navigation($0), minimumHeight: input.minimumRowHeight)
             }
             if input.skeleton {

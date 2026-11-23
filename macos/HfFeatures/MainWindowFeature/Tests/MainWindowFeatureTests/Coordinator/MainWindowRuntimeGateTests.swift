@@ -359,4 +359,149 @@ import Testing
         #expect(sut.selection == .task("def"))
     }
 
+    // MARK: - Store gate
+
+    private final class StoreFixture: StateRecoveryRepository, @unchecked Sendable {
+        let subject: CurrentValueSubject<StoreRecoveryState, Never>
+
+        init(_ state: StoreRecoveryState = .idle) { self.subject = CurrentValueSubject(state) }
+        var state: StoreRecoveryState { subject.value }
+        func statePublisher() -> AnyPublisher<StoreRecoveryState, Never> { subject.eraseToAnyPublisher() }
+        func report(_: ToolError) {}
+        func inspect() async {}
+        func requestConfirmation(inspection _: StateInspection) {}
+        func cancelConfirmation() {}
+        func recover(inspection _: StateInspection) async {}
+        func invalidate() {}
+    }
+
+    private static let storeRefusal = ToolError.structuredRefusal(
+        code: "state_incompatible",
+        message: "Unsupported state root: foreign store marker; inspect state or select a fresh state root",
+        data: ["reason": .string("foreign_store"), "state_root": .string("/tmp/harflow-state")]
+    )
+
+    private func makeStoreSUT(store: StoreFixture, install: InstallFixture = InstallFixture(.ready),
+                              fixture: ListingFixture = ListingFixture(hasListed: true)) -> MainWindowCoordinator {
+        MainWindowCoordinator(parent: MockCoordinator(), installRepository: install, taskListRepository: fixture.listing,
+                              stateRecoveryRepository: store)
+    }
+
+    @Test func givenReadyRuntime_whenTheStoreRefusesWork_thenTheStoreGateShowsAndWorkIsUnavailable() async {
+        // given
+        let store = StoreFixture()
+        let sut = makeStoreSUT(store: store)
+        #expect(sut.mainGate == nil)
+        // when
+        store.subject.send(.incompatible(Self.storeRefusal))
+        await waitUntil { sut.mainGate != nil }
+        // then
+        #expect(sut.mainGate == .storeUnusable(StoreAttention(error: Self.storeRefusal)))
+        #expect(!sut.workIsAvailable)
+        #expect(sut.runtimeIsReady)
+    }
+
+    @Test func givenAnUnusableStoreAtLaunch_whenTheCoordinatorIsBuilt_thenTheGateShowsAtOnce() {
+        // given / when
+        let sut = makeStoreSUT(store: StoreFixture(.incompatible(Self.storeRefusal)))
+        // then
+        #expect(sut.mainGate == .storeUnusable(StoreAttention(error: Self.storeRefusal)))
+        #expect(!sut.workIsAvailable)
+    }
+
+    @Test func givenTheStoreGate_whenCreationIsRequestedByEveryPath_thenNothingIsCreated() async {
+        // given
+        let store = StoreFixture(.incompatible(Self.storeRefusal))
+        let sut = makeStoreSUT(store: store)
+        // when
+        sut.openNewSession()
+        sut.handle(path: MonitorDestination.newSession)
+        sut.handle(path: MonitorDestination.newWorkflow(UUID()))
+        sut.handle(path: MonitorDestination.workflowLibrary)
+        sut.select(.newSession)
+        sut.presentWorkflowRunner()
+        sut.isNewSessionPresented = true
+        // then
+        #expect(sut.selection == nil)
+        #expect(sut.presentedSheet == nil)
+        #expect(!sut.isNewSessionPresented)
+    }
+
+    @Test func givenTheStoreGate_whenTheStoreIsRecoveredOrInspectedAsReady_thenTheGateClearsAndCreationIsRestored() async {
+        // given
+        let store = StoreFixture(.incompatible(Self.storeRefusal))
+        let sut = makeStoreSUT(store: store)
+        #expect(sut.mainGate != nil)
+        // when
+        store.subject.send(.idle)
+        await waitUntil { sut.mainGate == nil }
+        sut.openNewSession()
+        // then
+        #expect(sut.workIsAvailable)
+        #expect(sut.selection == .newSession)
+    }
+
+    @Test(arguments: [false, true])
+    func givenTheStoreGate_whenAnInspectionOrRecoveryIsInFlight_thenOnlyTheOutcomeDecidesTheGate(hasListed: Bool) async {
+        // given
+        let store = StoreFixture(.incompatible(Self.storeRefusal))
+        let sut = makeStoreSUT(store: store, fixture: ListingFixture(hasListed: hasListed))
+        // when the inspection runs, the gate clears (the store state is no longer a refusal)
+        store.subject.send(.inspecting)
+        await waitUntil { sut.mainGate == nil }
+        // then it returns with the inspection's own verdict
+        let inspection = StateInspection([
+            "state_root": .string("/tmp/harflow-state"), "engine_version": .string("0.0.2"), "status": .string("interrupted"),
+            "reason": .string("recovery_interrupted"), "message": .string("Explicit recovery must be resumed"),
+            "recovery_supported": .bool(false), "cooperative_ownership_only": .bool(true)
+        ])!
+        store.subject.send(.inspected(inspection))
+        await waitUntil { sut.mainGate != nil }
+        #expect(sut.mainGate == .storeUnusable(StoreAttention.from(inspection: inspection)!))
+    }
+
+    @Test func givenTheStoreGate_whenTheRuntimeIsNotReady_thenTheSetupGateIsTheOnlyGate() async {
+        // given
+        let install = InstallFixture(.installationRequired(installedVersion: nil, requiredVersion: "0.0.2"))
+        let sut = makeStoreSUT(store: StoreFixture(.incompatible(Self.storeRefusal)), install: install)
+        // then
+        #expect(sut.mainGate == nil)
+        // when the runtime becomes ready while the store still refuses
+        install.setupState = .ready
+        install.setupSubject.send(.ready)
+        await waitUntil { sut.mainGate != nil }
+        // then
+        #expect(sut.mainGate == .storeUnusable(StoreAttention(error: Self.storeRefusal)))
+    }
+
+    @Test func givenTheStoreGate_whenARepeatedStateArrives_thenTheGateIsNotWrittenAgain() async {
+        // given
+        let store = StoreFixture(.incompatible(Self.storeRefusal))
+        let sut = makeStoreSUT(store: store)
+        let changes = RefreshCounter()
+        withObservationTracking { _ = sut.mainGate } onChange: { changes.increment() }
+        // when
+        store.subject.send(.incompatible(Self.storeRefusal))
+        store.subject.send(.incompatible(Self.storeRefusal))
+        try? await Task.sleep(for: .milliseconds(150))
+        // then
+        #expect(changes.value == 0)
+    }
+
+    @Test func givenTheStoreGate_whenAContractErrorArrives_thenTheStoreGateStaysUntilTheStoreClears() async {
+        // given
+        let store = StoreFixture(.incompatible(Self.storeRefusal))
+        let fixture = ListingFixture(hasListed: true)
+        let sut = makeStoreSUT(store: store, fixture: fixture)
+        // when
+        fixture.errors.send(Self.contractError)
+        try? await Task.sleep(for: .milliseconds(100))
+        // then
+        #expect(sut.mainGate == .storeUnusable(StoreAttention(error: Self.storeRefusal)))
+        // when
+        store.subject.send(.idle)
+        await waitUntil { sut.mainGate == .contractRefused(status: Self.contractError.message, code: nil) }
+        // then
+        #expect(sut.mainGate == .contractRefused(status: Self.contractError.message, code: nil))
+    }
 }
