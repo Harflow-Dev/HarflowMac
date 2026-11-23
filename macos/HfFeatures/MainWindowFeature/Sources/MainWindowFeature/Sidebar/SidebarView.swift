@@ -190,7 +190,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
                             .font(.callout)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .help("Open Settings → General to inspect the store and review recovery")
+                    .help("Open Settings → General to inspect the store")
                     .accessibilityIdentifier("sidebar-store-attention")
                 }
                 if let note = viewModel.catalogUnavailableNote {

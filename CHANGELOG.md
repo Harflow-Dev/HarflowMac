@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Hide the task store's backup, reset and resume actions in Settings → General until the Rust task store design: the review, confirm and cancel controls, the archival warning and the retry hint no longer appear, and the sidebar help text now says "inspect the store". Inspection, the status rows and Show backup in Finder for an earlier receipt stay. The repository, use case and engine `state-recover` path are unchanged.
+
+- Remove the legacy Needs you and task-finished notifiers. Notifications now come only from the engine's durable interaction feed (`interaction-events.v1`), which the paired 0.0.14 runtime provides; an engine without that capability posts no notifications. "Notify when a task finishes" still gates task banners from the feed. The click route for a previously delivered `needs_you_item` notification stays.
+
 - Fix "Notify when a request needs you" in Settings, which did nothing: the toggle snapped back and the setting was never stored, because the setter was not part of the settings contract and the call reached an empty default. The setting is now saved, applied live and kept across launches.
 
 - Gate the menu bar on the managed runtime being ready. While it is not ready, the "+" new-session button is disabled (drawn in the secondary colour) and a tap does nothing, which also stops an empty main window opening; the workflow status stops polling `workflow-list-page` and shows no workflow rows or counts, then polls at once when the runtime becomes ready.

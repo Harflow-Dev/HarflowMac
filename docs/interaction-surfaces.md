@@ -70,9 +70,9 @@ engine storage. Initial historical episodes are baselined, retained newer episod
 survive app restart, and completed scan cycles safely replay stable IDs without duplicate
 banners. Deduplication retains a rolling 30-day window. The feed explicitly reports
 source/retention gaps; removed episodes cannot be recovered. A failed notification post
-is retried on a later scan. Engines lacking the capability retain the existing Needs you
-and root-task listing notifications; those older paths cannot discover between-poll
-requests or task transitions. No provider-message subscription is created.
+is retried on a later scan. Engines lacking the capability post no notifications: the
+earlier Needs you and root-task listing notifiers were removed (owner decision 2026-11-23).
+The task-finished setting still gates task banners from this feed. No provider-message subscription is created.
 
 Shared answering follows owner-approved HarflowDesign commit `690ec495b148293172ac93272b81e3d68c2f8e7d` (2026-11-02),
 `docs/shared-answering.md`, `features/work-interaction.html` and `features/needs-you.html`,

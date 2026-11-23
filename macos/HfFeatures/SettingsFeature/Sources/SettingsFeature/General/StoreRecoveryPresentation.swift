@@ -34,6 +34,11 @@ protocol StoreRecoveryRouting: Sendable {
 
 /// State-bound panel content. Only completed engine receipts expose a reveal action.
 struct StoreRecoveryPresentation: Equatable {
+    /// Whether the backup, reset and resume actions are offered. Hidden by owner decision 2026-11-23 until
+    /// the Rust store design (R01) decides how recovery is presented. Inspection, status rows and the backup
+    /// reveal of an earlier receipt stay; the repository, use case and engine recovery path are unchanged.
+    static let recoveryActionsAvailable = false
+
     var title = "Task store"
     var message = "Inspect the task store to check compatibility. Inspection does not reset history."
     var root: String?
@@ -48,6 +53,10 @@ struct StoreRecoveryPresentation: Equatable {
     var canReveal = false
     var completedBackupPath: String?
     var confirmationTitle = "Confirm backup and reset"
+    /// Whether the archival warning that accompanies the review and confirm controls is shown.
+    var showsArchivalWarning: Bool { requestTitle != nil || confirming }
+    /// Whether the "inspect again before retrying" hint is shown. Only meaningful while recovery is offered.
+    private(set) var showsRetryHint = false
 
     init(state: StoreRecoveryState, receipt: StateRecoveryResult? = nil) {
         self.completedBackupPath = receipt?.backupPath
@@ -63,15 +72,18 @@ struct StoreRecoveryPresentation: Equatable {
             self.canInspect = false
         case .inspected(let inspection):
             apply(inspection)
-            if inspection.recoverySupported, let proposal = inspection.recovery {
+            if Self.recoveryActionsAvailable, inspection.recoverySupported, let proposal = inspection.recovery {
                 self.requestTitle = proposal.resumable ? "Review interrupted recovery" : "Review backup and reset"
             }
         case .confirming(let inspection):
             apply(inspection)
-            self.title = inspection.recovery?.resumable == true ? "Resume this recovery?" : "Back up and reset this store?"
-            self.confirmationTitle = inspection.recovery?.resumable == true ? "Confirm resume recovery" : "Confirm backup and reset"
-            self.confirming = true
-            self.canInspect = false
+            // With recovery hidden, a confirmation published by the use case renders like an inspection.
+            if Self.recoveryActionsAvailable {
+                self.title = inspection.recovery?.resumable == true ? "Resume this recovery?" : "Back up and reset this store?"
+                self.confirmationTitle = inspection.recovery?.resumable == true ? "Confirm resume recovery" : "Confirm backup and reset"
+                self.confirming = true
+                self.canInspect = false
+            }
         case .recovering(let inspection):
             apply(inspection)
             self.title = "Recovering task store…"
@@ -92,6 +104,7 @@ struct StoreRecoveryPresentation: Equatable {
             self.title = "Recovery could not finish"
             apply(error)
         }
+        self.showsRetryHint = Self.recoveryActionsAvailable && phase != nil && !canReveal && requestTitle == nil && !confirming && !busy
     }
 
     private mutating func apply(_ inspection: StateInspection) {

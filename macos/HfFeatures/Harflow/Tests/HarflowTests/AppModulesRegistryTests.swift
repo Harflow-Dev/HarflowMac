@@ -71,7 +71,6 @@ private struct GlobalValuesSnapshot {
     private let toolEnvironmentRepository = GlobalValues.toolEnvironmentRepository
     private let taskSnapshotRepository = GlobalValues.taskSnapshotRepository
     private let eventStreamRepository = GlobalValues.eventStreamRepository
-    private let finishNotifier = GlobalValues.finishNotifier
     private let taskActionRepository = GlobalValues.taskActionRepository
     private let harnessRepository = GlobalValues.harnessRepository
     private let scheduling = GlobalValues.scheduling
@@ -88,7 +87,6 @@ private struct GlobalValuesSnapshot {
             .environment(\.toolEnvironmentRepository, toolEnvironmentRepository)
             .environment(\.taskSnapshotRepository, taskSnapshotRepository)
             .environment(\.eventStreamRepository, eventStreamRepository)
-            .environment(\.finishNotifier, finishNotifier)
             .environment(\.taskActionRepository, taskActionRepository)
             .environment(\.harnessRepository, harnessRepository)
             .environment(\.scheduling, scheduling)

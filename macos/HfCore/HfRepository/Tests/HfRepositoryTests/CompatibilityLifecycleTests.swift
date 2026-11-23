@@ -203,13 +203,11 @@ import Testing
         given(snapshots).refresh(ids: .any).willReturn()
         let events = MockEventStreamRepository()
         given(events).leasedTaskIDs.willReturn([])
-        let notifier = MockFinishNotifier()
-        given(notifier).notify(.any, titleFor: .any).willReturn()
         let visibility = MockMonitorVisibility()
         given(visibility).mainWindowVisible.willReturn(true)
         given(visibility).menuBarPopoverOpen.willReturn(false)
         return TaskListRepositoryImpl(toolEnvironment: environment, snapshotRepository: snapshots,
-            eventStreamRepository: events, finishNotifier: notifier, scheduler: scheduler, visibility: visibility,
+            eventStreamRepository: events, scheduler: scheduler, visibility: visibility,
             compatibilityCheck: compatibilityCheck)
     }
 

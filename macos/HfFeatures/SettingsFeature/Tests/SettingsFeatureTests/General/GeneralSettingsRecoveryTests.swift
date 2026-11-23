@@ -81,7 +81,7 @@ import Testing
         }
     }
 
-    @Test func givenInterruptedInspection_whenRequestIsCancelled_thenRecoveryRemainsUnstarted() async {
+    @Test func givenInterruptedInspection_whenRequestingRecovery_thenConfirmationIsNeverRequested() async {
         let useCase = RecoveryUseCase()
         let sut = GeneralSettingsVM(useCase: useCase)
         sut.didAppear()
@@ -89,11 +89,24 @@ import Testing
         await waitUntil { useCase.inspectCount == 1 && { if case .inspected = useCase.recoveryState { true } else { false } }() }
 
         sut.didTapRequestRecovery()
-        #expect({ if case .confirming = useCase.recoveryState { true } else { false } }())
-        sut.didTapCancelRecovery()
 
         #expect({ if case .inspected = useCase.recoveryState { true } else { false } }())
+        #expect(useCase.confirmation == nil)
         #expect(useCase.recovered == nil)
+    }
+
+    @Test func givenConfirmationPublishedByUseCase_whenConfirming_thenRecoveryIsNeverStarted() async {
+        let useCase = RecoveryUseCase()
+        let sut = GeneralSettingsVM(useCase: useCase)
+        sut.didAppear()
+        useCase.publish(.confirming(RecoveryUseCase.inspection()))
+        await waitUntil { if case .confirming = sut.recoveryState { true } else { false } }
+
+        sut.didTapConfirmRecovery()
+        sut.didTapCancelRecovery()
+
+        #expect(useCase.recovered == nil)
+        #expect(!sut.recoveryPresentation.confirming)
     }
 
     @Test func givenUnsupportedInspection_whenRequestingRecovery_thenItDoesNotEnterConfirmation() async {
@@ -108,9 +121,8 @@ import Testing
         #expect(sut.recoveryPresentation.requestTitle == nil)
     }
 
-    @Test func givenConfirmedRecovery_whenEngineReturnsReceipt_thenReceiptIsRetainedAndRevealRoutesIt() async {
+    @Test func givenCompletedReceipt_whenRevealIsTapped_thenRevealRoutesTheReceipt() async {
         let useCase = RecoveryUseCase()
-        useCase.result = .completed(RecoveryUseCase.receipt())
         let routing = MockStoreRecoveryRouting()
         var revealed: StateRecoveryResult?
         given(routing)
@@ -118,17 +130,12 @@ import Testing
 .willProduce { revealed = $0 }
         let sut = GeneralSettingsVM(useCase: useCase, recoveryRouting: routing)
         sut.didAppear()
-        useCase.publish(.inspected(RecoveryUseCase.inspection()))
-        await waitUntil { if case .inspected = sut.recoveryState { true } else { false } }
-        sut.didTapRequestRecovery()
-        await waitUntil { if case .confirming = sut.recoveryState { true } else { false } }
-        sut.didTapConfirmRecovery()
-        await waitUntil { useCase.recovered != nil }
+        useCase.publish(.completed(RecoveryUseCase.receipt()))
         await waitUntil { if case .completed = sut.recoveryState { true } else { false } }
 
-        #expect({ if case .completed = useCase.recoveryState { true } else { false } }())
         #expect(sut.recoveryPresentation.canReveal)
         sut.didTapRevealBackup()
+
         #expect(revealed == RecoveryUseCase.receipt())
     }
 

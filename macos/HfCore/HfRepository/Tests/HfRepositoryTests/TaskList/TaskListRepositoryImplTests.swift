@@ -66,7 +66,6 @@ import Testing
         toolEnvironment: MockToolEnvironmentRepository = MockToolEnvironmentRepository(),
         snapshotRepository: MockTaskSnapshotRepository = MockTaskSnapshotRepository(),
         eventStreamRepository: MockEventStreamRepository = MockEventStreamRepository(),
-        finishNotifier: MockFinishNotifier = MockFinishNotifier(),
         scheduler: MockScheduling = TaskListRepositoryImplTests.defaultScheduler(),
         visibility: MockMonitorVisibility = TaskListRepositoryImplTests.defaultVisibility(),
         invalidationSource: (any TaskListInvalidationSource)? = nil
@@ -76,11 +75,10 @@ import Testing
         given(snapshotRepository).refresh(ids: .any).willReturn()
         given(snapshotRepository).snapshot(.any).willReturn(nil)
         given(eventStreamRepository).leasedTaskIDs.willReturn([])
-        given(finishNotifier).notify(.any, titleFor: .any).willReturn()
         given(toolEnvironment).discoverEnvironment().willReturn(DiscoveryResult(loginPath: nil, uv: nil))
         return TaskListRepositoryImpl(
             toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository,
-            eventStreamRepository: eventStreamRepository, finishNotifier: finishNotifier, scheduler: scheduler,
+            eventStreamRepository: eventStreamRepository, scheduler: scheduler,
             visibility: visibility, invalidationSource: invalidationSource ?? PollingTaskListInvalidationSource(scheduler: scheduler),
             compatibilityCheck: { _ in .success(()) }
         )

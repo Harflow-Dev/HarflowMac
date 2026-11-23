@@ -431,54 +431,6 @@ extension TaskListRepositoryImplTests {
         #expect(connectedSUT.connectionLine == "harflow connected · claude")
     }
 
-    // MARK: F4-08 — the first listing never notifies
-
-    @Test func givenTheFirstListing_whenItCompletes_thenNothingIsNotified() async {
-        // given — a root that would look "finished" if judged in isolation, but there is no
-        // "previous" listing to compare against yet.
-        let toolEnvironment = MockToolEnvironmentRepository()
-        given(toolEnvironment).tasksDirectory.willReturn(FileManager.default.temporaryDirectory.path)
-        given(toolEnvironment).ctl().willReturn(.success(ctlClient(listing: ["a"])))
-        let finishNotifier = MockFinishNotifier()
-        let notifyCallCount = LockedBox(0)
-        given(finishNotifier).notify(.any, titleFor: .any).willProduce { _, _ in notifyCallCount.mutate { $0 += 1 } }
-        let sut = makeSUT(toolEnvironment: toolEnvironment, finishNotifier: finishNotifier)
-
-        // when
-        await sut.refresh()
-
-        // then — the listing was really applied (rules out a no-op refresh that would trivially
-        // never notify anything)...
-        #expect(sut.hasListed)
-        #expect(sut.tasks.map(\.taskID) == ["a"])
-        // ...and still nothing was notified, because there is no "previous" listing to compare
-        // against yet.
-        #expect(notifyCallCount.value == 0)
-    }
-
-    @Test func givenASecondListingWithARootNowFinished_whenItCompletes_thenItIsNotified() async {
-        // given — F4-08: the first listing sees "a" running; the second sees it terminal, which is
-        // exactly `Lineage.finishedRoots`'s definition of something worth notifying about.
-        let toolEnvironment = MockToolEnvironmentRepository()
-        given(toolEnvironment).tasksDirectory.willReturn(FileManager.default.temporaryDirectory.path)
-        let resultBox = LockedBox<Result<CtlClient, ToolError>>(.success(ctlClient(listing: ["a"])))
-        given(toolEnvironment).ctl().willProduce { resultBox.value }
-        let finishNotifier = MockFinishNotifier()
-        let notified = LockedBox<[TaskInfo]>([])
-        given(finishNotifier).notify(.any, titleFor: .any).willProduce { finished, _ in notified.mutate { $0 = finished } }
-        let sut = makeSUT(toolEnvironment: toolEnvironment, finishNotifier: finishNotifier)
-        await sut.refresh()
-        #expect(notified.value.isEmpty)
-
-        // when
-        let doneRunner = StubProcessRunner(output: historyStdout(#"{"v":2,"tasks":[{"task_id":"a","status":"completed","backend":"claude","depth":0}]}"#))
-        resultBox.mutate { $0 = .success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(doneRunner))) }
-        await sut.refresh()
-
-        // then
-        #expect(notified.value.map(\.taskID) == ["a"])
-    }
-
     // MARK: runningInSubtrees
 
     @Test func givenARunningSubTask_whenCountingRunningSubtrees_thenItIsIncluded() async {

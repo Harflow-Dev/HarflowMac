@@ -194,7 +194,7 @@ struct PendingLaunchesOwnerFlowTests {
         given(tools).discoverEnvironment().willReturn(DiscoveryResult(loginPath: nil, uv: nil))
         let list = TaskListRepositoryImpl(
             toolEnvironment: tools, snapshotRepository: NullTaskSnapshotRepository(), eventStreamRepository: NullEventStreamRepository(),
-            finishNotifier: NullFinishNotifier(), scheduler: NullScheduling(), visibility: NullMonitorVisibility(),
+            scheduler: NullScheduling(), visibility: NullMonitorVisibility(),
             compatibilityCheck: { _ in .success(()) }
         )
         let actions = TaskActionRepositoryImpl(toolEnvironment: tools, taskListRepository: list, snapshotRepository: NullTaskSnapshotRepository())

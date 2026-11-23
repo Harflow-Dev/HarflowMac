@@ -160,7 +160,7 @@ struct TaskHistoryPaginationTests {
         #expect(sut.historyState.nextCursor == "older")
     }
 
-    @Test func givenPartialBootstrapInventories_whenStatusesChange_thenCountsAndFinishNotificationsWaitForCompleteIndex() async {
+    @Test func givenPartialBootstrapInventories_whenStatusesChange_thenCountsWaitForCompleteIndex() async {
         // given
         let environment = MockToolEnvironmentRepository()
         given(environment).tasksDirectory.willReturn(FileManager.default.temporaryDirectory.path)
@@ -170,9 +170,8 @@ struct TaskHistoryPaginationTests {
             return .success(response(["root"], status: current.status, activeCount: current.count, pending: current.pending))
         }
         given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
-        let notifier = MockFinishNotifier()
-        let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment, finishNotifier: notifier)
-        // when / then: partial bootstrap cannot establish a count or notification baseline.
+        let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment)
+        // when / then: partial bootstrap cannot establish a count baseline.
         await sut.refresh()
         #expect(!sut.historyState.countsComplete)
         #expect(sut.runningCount == 0)
@@ -184,50 +183,11 @@ struct TaskHistoryPaginationTests {
         await sut.refresh()
         #expect(!sut.historyState.countsComplete)
         #expect(sut.runningCount == 300)
-        verify(notifier).notify(.any, titleFor: .any).called(0)
-        // when a complete inventory returns, the real transition is reported once.
+        // when a complete inventory returns, the real transition is applied.
         state.mutate { $0 = (false, "completed", 299) }
         await sut.refresh()
         // then
-        verify(notifier).notify(.any, titleFor: .any).called(1)
         #expect(sut.runningCount == 299)
-    }
-
-    @Test func givenUncertainTerminalHeader_whenPolling_thenNoFinishNotificationUntilOutcomeReconciles() async {
-        // given
-        let environment = MockToolEnvironmentRepository()
-        given(environment).tasksDirectory.willReturn(FileManager.default.temporaryDirectory.path)
-        let phase = LockedBox(0)
-        let runner = StubProcessRunner { _ in
-            let current = phase.value
-            let item: [String: JSONValue] = ["task_id": .string("root"), "status": .string(current == 0 ? "running" : current == 3 ? "completed" : "failed"),
-                "needs_reconciliation": .bool(current == 1 || current == 2), "status_reconciled": .bool(current == 3),
-                "process_identity_state": .string(current >= 2 ? "dead" : "uncertain")]
-            let result: [String: JSONValue] = ["items": .array([.object(item)]), "next_cursor": .null,
-                "has_more": .bool(false), "bootstrap_pending": .bool(false), "total_active_count": .null, "counts_complete": .bool(false)]
-            return .success(stdout(JSONValue.object([
-                "product": .string("harflow"), "format": .string("harflow.ctl"), "v": .number(1),
-                "product_version": .string("0.0.1"), "result": .object(result)
-            ])
-.rendered()))
-        }
-        given(environment).ctl().willReturn(.success(CtlClient(executable: "/bin/echo", environment: [:], runner: PositiveCtlRunner(runner))))
-        let notifier = MockFinishNotifier()
-        let finished = LockedBox<[TaskInfo]>([])
-        let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment, finishNotifier: notifier)
-        given(notifier).notify(.any, titleFor: .any).willProduce { tasks, _ in finished.mutate { $0.append(contentsOf: tasks) } }
-        await sut.refresh()
-        // when
-        phase.mutate { $0 = 1 }
-        await sut.refresh()
-        // then
-        #expect(finished.value.isEmpty)
-        phase.mutate { $0 = 2 }
-        await sut.refresh()
-        #expect(finished.value.isEmpty, "verified death alone does not establish the agent outcome")
-        phase.mutate { $0 = 3 }
-        await sut.refresh()
-        #expect(finished.value.map(\.taskID) == ["root"])
     }
 
     @Test func givenOlderLoadedTerminalMarkedForReconciliation_whenPolling_thenExactIDBatchContinuesUpdatingIt() async {

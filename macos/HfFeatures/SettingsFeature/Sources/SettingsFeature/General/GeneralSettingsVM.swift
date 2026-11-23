@@ -125,12 +125,14 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
 
     func didTapInspectStore() { Task { await (useCase as? any StoreRecoveryUseCase)?.inspectStore() } }
     func didTapRequestRecovery() {
+        guard StoreRecoveryPresentation.recoveryActionsAvailable else { return }
         guard case .inspected(let inspection) = recoveryState else { return }
         (useCase as? any StoreRecoveryUseCase)?.confirmRecovery(inspection)
     }
 
     func didTapCancelRecovery() { (useCase as? any StoreRecoveryUseCase)?.cancelRecovery() }
     func didTapConfirmRecovery() {
+        guard StoreRecoveryPresentation.recoveryActionsAvailable else { return }
         guard case .confirming(let inspection) = recoveryState else { return }
         Task { await (useCase as? any StoreRecoveryUseCase)?.recoverStore(inspection) }
     }

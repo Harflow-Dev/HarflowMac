@@ -4,11 +4,11 @@ import SwiftEnvironment
 
 // MARK: - NeedsYouNotifier
 
-/// Turns pending requests and persisted winning answers into individual user notifications.
-/// Historical outcomes present in the first qualified observation never notify.
+/// Turns durable engine interaction events into individual user notifications. Events older than the
+/// app's per-state-root floor never notify.
 @Mockable
 public protocol NeedsYouNotifier: Sendable {
-    /// Starts consuming repository events; later calls do nothing.
+    /// Starts consuming engine interaction events; later calls do nothing.
     func start()
 }
 

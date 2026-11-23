@@ -336,6 +336,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             coordinator?.handle(path: MonitorDestination.workflowRun(run))
             coordinator?.handle(path: MonitorDestination.openWindow)
         } else if let item = userInfo["needs_you_item"] as? String, Self.isValidNeedsYouItemID(item) {
+            // No notifier produces this key any more (the legacy Needs you notifier was removed); the route stays so a
+            // notification delivered earlier still opens its item. How a click reaches Needs you is decided by N1.
             coordinator?.handle(path: MonitorDestination.needsYou(itemID: item))
             coordinator?.handle(path: MonitorDestination.openWindow)
         }

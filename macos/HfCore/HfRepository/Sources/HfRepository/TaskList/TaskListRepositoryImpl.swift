@@ -8,7 +8,6 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     let toolEnvironment: any ToolEnvironmentRepository
     private let snapshotRepository: any TaskSnapshotRepository
     private let eventStreamRepository: any EventStreamRepository
-    private let finishNotifier: any FinishNotifier
     let stateRecovery: any StateRecoveryRepository
     let scheduler: any Scheduling
     let visibility: any MonitorVisibility
@@ -48,7 +47,6 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
     private var historyTasks: [String: TaskInfo] = [:]
     private var relatedTasks: [String: TaskInfo] = [:]
     private var totalActiveCount = 0
-    private var notificationBaseline: [TaskInfo]?
     private var loadingMore = false
     private var historyInitialized = false
     private var historyRefreshFailed = false
@@ -65,14 +63,13 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         toolEnvironment: any ToolEnvironmentRepository,
         snapshotRepository: any TaskSnapshotRepository,
         eventStreamRepository: any EventStreamRepository,
-        finishNotifier: any FinishNotifier,
         scheduler: any Scheduling,
         visibility: any MonitorVisibility,
         compatibilityCheck: StoreCompatibilityCheck? = nil,
         stateRecovery: (any StateRecoveryRepository)? = nil
     ) {
         self.init(toolEnvironment: toolEnvironment, snapshotRepository: snapshotRepository,
-                  eventStreamRepository: eventStreamRepository, finishNotifier: finishNotifier,
+                  eventStreamRepository: eventStreamRepository,
                   scheduler: scheduler, visibility: visibility,
                   invalidationSource: PollingTaskListInvalidationSource(scheduler: scheduler),
                   compatibilityCheck: compatibilityCheck, stateRecovery: stateRecovery)
@@ -82,7 +79,6 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         toolEnvironment: any ToolEnvironmentRepository,
         snapshotRepository: any TaskSnapshotRepository,
         eventStreamRepository: any EventStreamRepository,
-        finishNotifier: any FinishNotifier,
         scheduler: any Scheduling,
         visibility: any MonitorVisibility,
         invalidationSource: any TaskListInvalidationSource,
@@ -94,7 +90,6 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
         self.stateRecovery = stateRecovery ?? NullStateRecoveryRepository()
         self.snapshotRepository = snapshotRepository
         self.eventStreamRepository = eventStreamRepository
-        self.finishNotifier = finishNotifier
         self.scheduler = scheduler
         self.visibility = visibility
         self.compatibilityCheck = compatibilityCheck ?? { root in
@@ -253,10 +248,9 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
             // A task that left the listing (retention) must not live on in the detail cache.
             let listedIDs = Set(listed.map(\.taskID))
             snapshotRepository.evict(keeping: listedIDs.union(eventStreamRepository.leasedTaskIDs).union(historyLock.withLock { Set(relatedTasks.keys) }))
-            // Before notifications: their title closure must already see an explicit title.
+            // Explicit titles are seeded before the listing is marked as presented.
             seedExplicitTitles(from: listed)
             if !historyStateValue.bootstrapPending, !historyStateValue.authorityIncomplete, historyStateValue.catalogState.isReady {
-                updateNotificationBaseline(listed)
                 hasListedValue = true
             } else if historyStateValue.catalogState.status == .blocked {
                 // A durable blocker completes initial presentation, but cannot establish authority.
@@ -321,21 +315,6 @@ public final class TaskListRepositoryImpl: TaskListRepository, @unchecked Sendab
                 return lhs == rhs ? $0.taskID > $1.taskID : lhs > rhs
             }
         }
-    }
-
-    private func updateNotificationBaseline(_ listed: [TaskInfo]) {
-        func unreconciled(_ task: TaskInfo) -> Bool {
-            task.raw["needs_reconciliation"]?.boolValue == true
-                && task.raw["observed_exit"]?.boolValue != true
-                && task.raw["status_reconciled"]?.boolValue != true
-        }
-        let previous = Dictionary((notificationBaseline ?? []).map { ($0.taskID, $0) }, uniquingKeysWith: { _, new in new })
-        let observed = listed.map { task in unreconciled(task) ? previous[task.taskID] ?? task : task }
-        if let baseline = notificationBaseline {
-            let finished = Lineage.finishedRoots(previous: baseline, current: observed).filter { !unreconciled($0) }
-            finishNotifier.notify(finished) { [weak self] id in self?.title(id) ?? "Task \(id.prefix(8))" }
-        }
-        notificationBaseline = observed
     }
 
     private func nextSnapshotRefreshBatch() -> [String] {

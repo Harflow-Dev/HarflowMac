@@ -2,16 +2,6 @@ import Foundation
 import MonitorCore
 @preconcurrency import UserNotifications
 
-// MARK: - NotificationDeliveryMode
-
-/// Shared routing gate prevents the legacy listing and durable feed from posting the same event.
-final class NotificationDeliveryMode: @unchecked Sendable {
-    private let lock = NSLock()
-    private var legacy = false
-    var allowsLegacy: Bool { lock.withLock { legacy } }
-    func setLegacy(_ value: Bool) { lock.withLock { legacy = value } }
-}
-
 // MARK: - InteractionNotificationLedger
 
 /// App-owned deduplication state, isolated from engine storage and scoped to its selected state root.
@@ -53,23 +43,21 @@ final class InteractionEventNotifier: NeedsYouNotifier, @unchecked Sendable {
     private let settings: any SettingsRepository
     private let scheduler: any Scheduling
     private let center: any NotificationCentering
-    private let legacy: any NeedsYouNotifier
-    private let mode: NotificationDeliveryMode
     private let canNotify: @Sendable () -> Bool
+    private let defaults: UserDefaults
     private let lock = NSLock()
     private var task: Task<Void, Never>?
 
     init(tooling: any ToolEnvironmentRepository, install: any InstallRepository, settings: any SettingsRepository,
-         scheduler: any Scheduling, center: any NotificationCentering, legacy: any NeedsYouNotifier, mode: NotificationDeliveryMode,
+         scheduler: any Scheduling, center: any NotificationCentering, defaults: UserDefaults = .standard,
          canNotify: @escaping @Sendable () -> Bool = { Bundle.main.bundleIdentifier != nil && Bundle.main.bundleURL.pathExtension == "app" }) {
         self.canNotify = canNotify
+        self.defaults = defaults
         self.tooling = tooling
         self.install = install
         self.settings = settings
         self.scheduler = scheduler
         self.center = center
-        self.legacy = legacy
-        self.mode = mode
     }
 
     func start() {
@@ -89,13 +77,12 @@ final class InteractionEventNotifier: NeedsYouNotifier, @unchecked Sendable {
                 if root != selected {
                     root = selected
                     cursor = nil
-                    ledger = InteractionNotificationLedger(defaults: .standard, stateRoot: selected, now: scheduler.now().timeIntervalSince1970)
+                    ledger = InteractionNotificationLedger(defaults: defaults, stateRoot: selected, now: scheduler.now().timeIntervalSince1970)
                 }
                 let result = await client.interactionEvents(cursor: cursor)
                 guard current(client) else { continue }
                 switch result {
                 case .success(let page):
-                    mode.setLegacy(false)
                     if let ledger {
                         for event in page.events {
                             guard !Task.isCancelled else { return }
@@ -107,12 +94,11 @@ final class InteractionEventNotifier: NeedsYouNotifier, @unchecked Sendable {
                     // Drain a cycle promptly without an unbounded burst of subprocesses.
                     try? await scheduler.wait(for: page.cycleComplete ? 3 : 0.25)
                     continue
-                case .failure(let error):
-                    if case .unsupportedCommand = error {
-                        mode.setLegacy(true)
-                        legacy.start()
-                    }
-                    // Failed pages retain their cursor; malformed sources must not silently advance it.
+                case .failure:
+                    // Failed pages retain their cursor; malformed sources must not silently advance it. An engine
+                    // without the interaction-events capability (`.unsupportedCommand`) posts nothing; the loop
+                    // keeps its 3 s cadence, so it recovers if the selected runtime later gains the capability.
+                    break
                 }
             }
             try? await scheduler.wait(for: 3)

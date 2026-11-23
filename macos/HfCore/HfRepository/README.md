@@ -22,7 +22,6 @@ For an explicitly selected runtime, ctl/setup clients carry the selected absolut
 | `EventStreamRepository` | Ref-counted per-task event tailing, shared across every screen watching the same task; also publishes each task's `EventAvailability` (`loading`/`available`/`unavailable`), so a caller never has to infer "the log couldn't be read" from an empty event list. |
 | `StateRecoveryRepository` | Shared structured store refusals and explicit inspection/confirmation/recovery lifecycle; single-flight operations and stale-result checks remain independent of managed acquisition. |
 | `TaskListRepository` | Bounded public task-history/status reads, titles, action refresh barriers, replaceable invalidation observation and `detail()` precedence. |
-| `FinishNotifier` | User notifications for roots that finished since the last listing. |
 | `TaskContinuationRepository` | App-session Continue attempt ownership and explicit bounded recorded-successor checks consumed by the standalone task screen. |
 | `TaskActionRepository` | Busy set + outcome line (durable, keyed by task id), cancel/send/resume/run, the raw takeover-grant passthrough. |
 | `TakeoverService` | Opens a task's session in Terminal.app — `ctl takeover` grant → hand-off files → `open -a Terminal`; the only take-over destination the Monitor offers. |
@@ -47,7 +46,7 @@ HARFLOW_NATIVE_BENCHMARK=1 python3 ../../../scripts/test-swift-package.py --pack
 
 `StatisticsRepository` exposes explicit public history pages. Its implementation receives tooling and state recovery through constructor injection, checks cancellation, and reports structured store refusal through the shared recovery boundary. The null repository is unavailable, not an empty history.
 
-`NeedsYouRepository` publishes one deduplicated snapshot of every request the Monitor can answer now, plus disposable `NeedsYouEvent`s for notifications. It is started once by the app shell. `NeedsYouNotifier` posts notifications with the user-info key `needs_you_item` (an item id beginning `input:`, `attention:` or `approval:`); the app routes it to the Needs you screen. Approval notifications name only the tool.
+`NeedsYouRepository` publishes one deduplicated snapshot of every request the Monitor can answer now, plus disposable `NeedsYouEvent`s. It is started once by the app shell. `NeedsYouRepository.eventsPublisher()` currently has no production subscriber. `NeedsYouNotifier` is implemented by `InteractionEventNotifier`; the app still routes a delivered `needs_you_item` user-info key (an item id beginning `input:`, `attention:` or `approval:`) to the Needs you screen, although no notifier sets it now. Approval notifications name only the tool.
 
 Workflow questions and recovery requests carry the runtime observation and epoch that produced
 the displayed request. Answer submission rejects a superseded observation, including A→B→A,
@@ -57,7 +56,7 @@ runtime provenance, not authenticated caller identity or approval decision autho
 engine refusals and drafts remain explicit; answers are never replayed automatically. This does
 not add workflow-wide unknown-outcome retention or an uncertainty recovery interface.
 
-`InteractionEventNotifier` consumes the capability-gated public interaction feed for individual macOS pending, answered, completed and failed banners. It persists app-owned event deduplication per selected state root and disables the legacy Needs you and finish sources while the durable feed is supported. Missing capability retains the legacy sources. It never writes engine records.
+`InteractionEventNotifier` consumes the capability-gated public interaction feed for individual macOS pending, answered, completed and failed banners. It persists app-owned event deduplication per selected state root. An engine without the capability posts no notifications; the poll keeps its 3 s cadence and resumes if the selected runtime gains the capability. It never writes engine records.
 
 ## Task-list observation
 

@@ -31,12 +31,10 @@ public final class Module: HfModule {
         let taskPrompt = TaskPromptRepositoryImpl(toolEnvironment: toolEnvironment, recovery: stateRecovery)
         let eventStream = makeEventStream(toolEnvironment: toolEnvironment, snapshot: snapshot, scheduler: scheduler,
                                                 taskPrompt: taskPrompt, runtime: runtime)
-        let (notificationMode, finishNotifier) = notificationRouting(settings: settings)
         let taskList = TaskListRepositoryImpl(
             toolEnvironment: toolEnvironment,
             snapshotRepository: snapshot,
             eventStreamRepository: eventStream,
-            finishNotifier: finishNotifier,
             scheduler: scheduler,
             visibility: visibility, invalidationSource: PollingTaskListInvalidationSource(scheduler: scheduler),
             stateRecovery: stateRecovery
@@ -61,7 +59,6 @@ public final class Module: HfModule {
             .environment(\.resourceSlotsRepository, ResourceSlotsRepositoryImpl(tooling: toolEnvironment, scheduler: scheduler))
             .environment(\.eventStreamRepository, eventStream)
             .environment(\.taskPromptRepository, taskPrompt)
-            .environment(\.finishNotifier, finishNotifier)
             .environment(\.taskListRepository, taskList)
             .environment(\.taskActionRepository, taskAction)
             .environment(\.harnessRepository, harness)
@@ -73,7 +70,7 @@ public final class Module: HfModule {
 
         registerPublicReaders(toolEnvironment: toolEnvironment, stateRecovery: stateRecovery, taskList: taskList, actions: taskAction, runtime: runtime)
         let shared = NeedsYouDependencies(scheduler: scheduler, visibility: visibility, settings: settings, install: install)
-        registerNeedsYou(toolEnvironment: toolEnvironment, workflows: workflows, shared: shared, notificationMode: notificationMode, approvals: approvals)
+        registerNeedsYou(toolEnvironment: toolEnvironment, workflows: workflows, shared: shared, approvals: approvals)
     }
 
     private func makeInstaller(layout: ManagedRuntimeLayout, baseEnvironment: [String: String]) -> any ManagedRuntimeInstalling {
@@ -114,11 +111,6 @@ public final class Module: HfModule {
             .environment(\.statisticsRepository, StatisticsRepositoryImpl(toolEnvironment: toolEnvironment, stateRecovery: stateRecovery))
     }
 
-    private func notificationRouting(settings: any SettingsRepository) -> (NotificationDeliveryMode, FinishNotifierImpl) {
-        let mode = NotificationDeliveryMode()
-        return (mode, FinishNotifierImpl(settings: settings, isEnabled: { mode.allowsLegacy }))
-    }
-
     /// The seams Needs you shares with the other repositories.
     private struct NeedsYouDependencies {
         let scheduler: any Scheduling
@@ -129,16 +121,14 @@ public final class Module: HfModule {
 
     private func registerNeedsYou(
         toolEnvironment: any ToolEnvironmentRepository, workflows: any WorkflowRepository, shared: NeedsYouDependencies,
-        notificationMode: NotificationDeliveryMode, approvals: any ApprovalResponding
+        approvals: any ApprovalResponding
     ) {
         let needsYou = NeedsYouRepositoryImpl(
             toolEnvironment: toolEnvironment, workflows: workflows, scheduler: shared.scheduler, visibility: shared.visibility,
             install: shared.install, approvals: approvals
         )
-        let legacy = NeedsYouNotifierImpl(repository: needsYou, settings: shared.settings, scheduler: shared.scheduler,
-                                          isEnabled: { notificationMode.allowsLegacy })
         let notifier = InteractionEventNotifier(tooling: toolEnvironment, install: shared.install, settings: shared.settings,
-                                               scheduler: shared.scheduler, center: SystemNotificationCenter(), legacy: legacy, mode: notificationMode)
+                                               scheduler: shared.scheduler, center: SystemNotificationCenter())
         GlobalValues
             .environment(\.needsYouRepository, needsYou)
             .environment(\.needsYouNotifier, notifier)

@@ -7,7 +7,7 @@ import MonitorCore
 import Testing
 
 struct TaskCatalogBlockedTests {
-    @Test func givenColdBlockedCatalog_whenPresentedAndRetried_thenRowsAndRecoveryAreAvailableWithoutAuthorityBaseline() async {
+    @Test func givenColdBlockedCatalog_whenPresentedAndRetried_thenRowsAndRecoveryAreAvailableWithoutAuthority() async {
         // given
         let phase = LockedBox("blocked")
         let runner = StubProcessRunner { _ in .success(response(phase.value, taskStatus: phase.value == "blocked" ? "running" : "completed")) }
@@ -15,11 +15,10 @@ struct TaskCatalogBlockedTests {
         let scheduler = MockScheduling()
         given(scheduler).now().willReturn(Date())
         given(scheduler).schedule(after: .any, execute: .any).willReturn(AnyCancellable {})
-        let notifier = MockFinishNotifier()
-        let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment, finishNotifier: notifier, scheduler: scheduler)
+        let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment, scheduler: scheduler)
         // when
         await sut.refresh()
-        // then: durable blockers finish presentation, not discovery or notification readiness.
+        // then: durable blockers finish presentation, not discovery readiness.
         #expect(sut.hasListed)
         #expect(sut.tasks.map(\.taskID) == ["root"])
         #expect(sut.historyState.catalogState.status == .blocked)
@@ -28,24 +27,21 @@ struct TaskCatalogBlockedTests {
         #expect(!sut.historyState.countsComplete)
         #expect(sut.listError == nil)
         verify(scheduler).schedule(after: .value(2), execute: .any).called(0)
-        verify(notifier).notify(.any, titleFor: .any).called(0)
         // when: the Retry action must refresh the catalog even without a pagination cursor.
         phase.mutate { $0 = "ready" }
         await sut.loadMoreHistory()
-        // then: the first authoritative history establishes the baseline without historical alerts.
+        // then: the first authoritative history is applied.
         #expect(sut.historyState.catalogState.isReady)
         #expect(sut.historyState.countsComplete)
         #expect(sut.task("root")?.status == .completed)
         #expect(runner.calls.filter { $0.arguments.contains("--active-only") }.count == 1)
-        verify(notifier).notify(.any, titleFor: .any).called(0)
     }
 
-    @Test func givenLoadedHistory_whenCatalogBlocksAndRecovers_thenRowsCursorAndNotificationBaselineSurvive() async {
+    @Test func givenLoadedHistory_whenCatalogBlocksAndRecovers_thenRowsAndCursorSurvive() async {
         // given
         let phase = LockedBox("ready")
         let runner = StubProcessRunner { _ in .success(response(phase.value, taskStatus: phase.value == "ready" ? "running" : "completed", cursor: "older")) }
-        let notifier = MockFinishNotifier()
-        let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment(runner), finishNotifier: notifier)
+        let sut = TaskListRepositoryImplTests().makeSUT(toolEnvironment: environment(runner))
         await sut.refresh()
         // when
         phase.mutate { $0 = "blocked" }
@@ -56,14 +52,12 @@ struct TaskCatalogBlockedTests {
         #expect(sut.historyState.nextCursor == "older")
         #expect(sut.historyState.hasMore)
         #expect(!sut.historyState.countsComplete)
-        verify(notifier).notify(.any, titleFor: .any).called(0)
         // when
         phase.mutate { $0 = "recovered" }
         await sut.loadMoreHistory()
-        // then: a genuine transition after an established baseline is reported once.
+        // then
         #expect(sut.historyState.catalogState.isReady)
         #expect(sut.historyState.nextCursor == "older")
-        verify(notifier).notify(.matching { $0.map(\.taskID) == ["root"] }, titleFor: .any).called(1)
         #expect(!runner.calls.contains { $0.arguments.contains("--cursor=older") })
     }
 

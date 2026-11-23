@@ -21,7 +21,7 @@ struct StoreRecoveryPanel: View {
             if let operation = model.operationID { detail("Recovery operation", operation) }
             if let completed = model.completedBackupPath, completed != model.backupPath { detail("Previous recovery backup", completed) }
             if let phase = model.phase { detail("Phase", phase) }
-            if model.requestTitle != nil || model.confirming {
+            if model.showsArchivalWarning {
                 Text("Previous task history will be archived, not imported. "
                      + "Recovery checks cooperative ownership; close sessions using this store first. "
                      + "The backup is archival history, not an automatic restore.")
@@ -45,7 +45,7 @@ struct StoreRecoveryPanel: View {
                     Button("Show backup in Finder", action: reveal).accessibilityIdentifier("state-recovery-reveal")
                 }
             }
-            if model.phase != nil, !model.canReveal, model.requestTitle == nil, !model.confirming, !model.busy {
+            if model.showsRetryHint {
                 Text("Inspect again before retrying. Any reported backup evidence is retained; the operation may have partially completed.")
                     .font(.callout)
 .foregroundStyle(.secondary)

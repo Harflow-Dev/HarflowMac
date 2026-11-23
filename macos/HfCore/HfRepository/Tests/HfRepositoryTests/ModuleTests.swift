@@ -39,7 +39,7 @@ struct ModuleTests {
         #expect(GlobalValues.taskSnapshotRepository is TaskSnapshotRepositoryImpl)
         #expect(GlobalValues.eventStreamRepository is RecoveryEventStreamRepository)
         #expect(GlobalValues.taskChangesRepository is TaskChangesRepositoryImpl)
-        #expect(GlobalValues.finishNotifier is FinishNotifierImpl)
+        #expect(GlobalValues.needsYouNotifier is InteractionEventNotifier)
         #expect(GlobalValues.taskListRepository is TaskListRepositoryImpl)
         #expect(GlobalValues.taskActionRepository is TaskActionRepositoryImpl)
         #expect(GlobalValues.taskContinuationRepository is TaskContinuationRepositoryImpl)

@@ -109,29 +109,19 @@ extension TaskListRepositoryImplTests {
         #expect(sut.title("a") == "Explicit title")
     }
 
-    @Test func givenAFinishedTaskWithAListedTitle_whenNotified_thenTheTitleClosureSeesTheExplicitTitle() async {
-        // given — the closure is invoked inside `notify`, i.e. at dispatch time, not afterwards
-        let dir = makeTasksDirectory(prompts: ["a": "prompt title"])
-        defer { try? FileManager.default.removeItem(at: dir) }
+    @Test func givenAListedTitleAndAnUnlistedID_whenReadingTitles_thenExplicitTitleAndPrefixFallbackAreReturned() async {
+        // given
         let toolEnvironment = MockToolEnvironmentRepository()
-        given(toolEnvironment).tasksDirectory.willReturn(dir.path)
-        let resultBox = LockedBox<Result<CtlClient, ToolError>>(.success(listingClient([entry("a")])))
-        given(toolEnvironment).ctl().willProduce { resultBox.value }
-        let finishNotifier = MockFinishNotifier()
-        let titleSeen = LockedBox<String?>(nil)
-        given(finishNotifier).notify(.any, titleFor: .any).willProduce { finished, titleFor in
-            if let id = finished.first?.taskID { titleSeen.mutate { $0 = titleFor(id) } }
-        }
-        let sut = makeSUT(toolEnvironment: toolEnvironment, finishNotifier: finishNotifier)
-        await sut.refresh()
-        #expect(sut.titleLoadPassCount == 0)
+        given(toolEnvironment).tasksDirectory.willReturn(FileManager.default.temporaryDirectory.path)
+        given(toolEnvironment).ctl().willReturn(.success(listingClient([entry("a", status: "completed", title: "Explicit title")])))
+        let sut = makeSUT(toolEnvironment: toolEnvironment)
 
         // when
-        resultBox.mutate { $0 = .success(listingClient([entry("a", status: "completed", title: "Explicit title")])) }
         await sut.refresh()
 
         // then
-        #expect(titleSeen.value == "Explicit title")
+        #expect(sut.title("a") == "Explicit title")
+        #expect(sut.title("0123456789abcdef") == "Task 01234567")
     }
 
     @Test func givenAListedTitle_whenRefreshed_thenTheEventLogIsNotLoadedForThatId() async {
