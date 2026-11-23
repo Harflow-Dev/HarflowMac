@@ -1,8 +1,9 @@
 import Foundation
 
 /// The one `"v"` this app understands for `harflow-setup --json` — a contract separate from
-/// `harflow-ctl`'s (`ctlContractVersions`, `CtlModels.swift`) and the event log's
-/// (`eventLogVersion`, `Events.swift`), so a shape change to one never silently widens what the
+/// `harflow-ctl`'s (`ctlContractVersions`, `CtlModels.swift`) the event log's
+/// (`eventLogVersion`, `Events.swift`) and version-info's (`versionInfoContractVersion`,
+/// `WireContracts.swift`), so a shape change to one never silently widens what the
 /// app accepts from the others.
 public let setupContractVersion = 1
 

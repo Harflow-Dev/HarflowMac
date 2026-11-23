@@ -85,8 +85,8 @@ sync.
   never writes a task record, phase file or inbox itself, and every fact it shows comes from the
   engine; backend names appear only for display styling.
 - Each contract is gated independently on the Swift side: `ctlContractVersions` in
-  `MonitorCore/CtlModels.swift`, `setupContractVersion` in `SetupClient.swift`, and
-  `eventLogVersion` in `Events.swift`. The app refuses any version outside the set it understands,
+  `MonitorCore/CtlModels.swift`, `setupContractVersion` in `SetupClient.swift`,
+  `eventLogVersion` in `Events.swift`, and `versionInfoContractVersion` in `WireContracts.swift`. The app refuses any version outside the set it understands,
   naming the tool and the versions understood, rather than guessing.
 - Ctl/setup commands and asynchronous store readers validate the selected runtime and lexical state
   root before each operation (see `macos/HfCore/MonitorCore/README.md`).

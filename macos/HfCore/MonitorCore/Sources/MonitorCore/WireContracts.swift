@@ -16,7 +16,34 @@ public enum WireContract: String, Sendable, CaseIterable {
     public var capability: String {
         self == .versionInfo ? "version-info.v1" : "\(rawValue).v1"
     }
+
+    /// The tool the user sees named when this contract's answer is refused. An event record is only
+    /// refused while reading a `harflow-ctl` answer, so the event log is reported as `harflow-ctl`.
+    public var toolName: String {
+        switch self {
+        case .ctl, .events: return "harflow-ctl"
+        case .setup: return "harflow-setup"
+        case .versionInfo: return "harflow-ctl version-info"
+        }
+    }
+
+    /// The wire versions this app understands for this contract; the refusal check reads this set.
+    /// The refusal message resolves its set by tool name, and `.ctl` and `.events` both report as
+    /// "harflow-ctl", so the ctl and event log sets must stay equal while they share a tool name.
+    public var understoodVersions: Set<Int> {
+        switch self {
+        case .ctl: return ctlContractVersions
+        case .setup: return [setupContractVersion]
+        case .events: return [eventLogVersion]
+        case .versionInfo: return [versionInfoContractVersion]
+        }
+    }
 }
+
+/// The `harflow.version-info` wire version this app understands. Gated independently, like
+/// `ctlContractVersions` (`CtlModels.swift`), `setupContractVersion` (`SetupClient.swift`) and
+/// `eventLogVersion` (`Events.swift`).
+public let versionInfoContractVersion = 1
 
 /// Capabilities that qualify individual ctl operations beyond the base wire contract.
 public enum CtlCapability {
@@ -152,8 +179,8 @@ public enum WireEnvelope {
                                 productVersion: String = HarflowVersion.current) -> ToolError? {
         guard document["product"]?.stringValue == "harflow" else { return incompatibility("missing or foreign product identity") }
         guard document["format"]?.stringValue == contract.format else { return incompatibility("unsupported \(contract.format) format") }
-        guard document["v"]?.wireIntegerValue == 1 else {
-            return .unsupportedVersion(tool: contract.format, version: document["v"]?.rendered() ?? "none")
+        guard let wireVersion = document["v"]?.wireIntegerValue, contract.understoodVersions.contains(wireVersion) else {
+            return .unsupportedVersion(tool: contract.toolName, version: document["v"]?.rendered() ?? "none")
         }
         guard let text = document["product_version"]?.stringValue, let writer = HarflowVersion(text) else {
             return incompatibility("invalid product_version")
@@ -220,7 +247,8 @@ public struct VersionInfoDocument: Sendable {
             if contract == .versionInfo { continue }
             let advertised = contracts[contract.rawValue]?.objectValue
             guard advertised?["format"]?.stringValue == contract.format,
-                  advertised?["v"]?.wireIntegerValue == 1 else {
+                  let advertisedVersion = advertised?["v"]?.wireIntegerValue,
+                  contract.understoodVersions.contains(advertisedVersion) else {
                 return .failure(WireEnvelope.incompatibility("missing required \(contract.capability) contract/capability"))
             }
         }

@@ -279,7 +279,7 @@ public enum ToolError: Error, Equatable, Sendable {
         case .unsupportedVersion(let tool, let version):
             let understood = Self.understoodVersions(forTool: tool)
             let plural = understood.contains(" or ") || understood.contains(",")
-            return "`\(tool)` answered with contract version \(version); this app understands version\(plural ? "s" : "") \(understood). "
+            return "\(tool) answered with contract version \(version); this app understands version\(plural ? "s" : "") \(understood). "
                 + "Update the app or harflow so they match."
         case .unsupportedCommand(let tool, let command, let detail):
             return Self.unsupportedCommandMessage(tool: tool, command: command, detail: detail)
@@ -306,17 +306,13 @@ public enum ToolError: Error, Equatable, Sendable {
     }
 
     /// The versions understood for `tool`'s own contract, rendered for the unsupported-version
-    /// message ("1 or 2", "1", …). Each tool has exactly one contract, so its name is enough to
-    /// pick the right constant — see `ctlContractVersions`/`setupContractVersion`.
+    /// message ("1 or 2", "1", …). The tool name is resolved through `WireContract.toolName` and
+    /// the set read from `WireContract.understoodVersions`. `.ctl` and `.events` both report as
+    /// "harflow-ctl", so the ctl set is rendered for both: the ctl and event log version sets must
+    /// stay equal while they share a tool name.
     fileprivate static func understoodVersions(forTool tool: String) -> String {
-        switch tool {
-        case "harflow-ctl":
-            return ctlContractVersions.sorted().map(String.init).joined(separator: " or ")
-        case "harflow-setup":
-            return String(setupContractVersion)
-        default:
-            return String(eventLogVersion)
-        }
+        let contract = WireContract.allCases.first { $0.toolName == tool } ?? .events
+        return contract.understoodVersions.sorted().map(String.init).joined(separator: " or ")
     }
 }
 

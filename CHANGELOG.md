@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Say which tool refused a contract version, and say "runtime" instead of "engine" in the runtime setup details (HarflowDesign `e1c9230`, `app-states/contract-refused` and the `settings/runtime-*` rows). The refusal now names `harflow-ctl`, `harflow-setup` or `harflow-ctl version-info` instead of the contract's format name, without code formatting, and the versions it lists come from the same per-contract set the check uses, including the version-info contract and the contracts advertised by version-info. The install, update, retry and failure details read "runtime" where they read "engine".
+
 - Show a partial reported-cost total in Statistics. When only some eligible executions reported a cost, the card shows the sum of those and reads "From X of Y executions; the rest are left out, not counted as zero", instead of "Unavailable". The wording and behaviour are an owner decision replacing the earlier design. A set whose only reported cost is $0 shows $0.00. An unqualified or invalid cost, or a sum that cannot be represented, still shows Unavailable, and an unknown harness never shows a per-harness total.
 
 - Hide the task store's backup, reset and resume actions in Settings → General until the Rust task store design: the review, confirm and cancel controls, the archival warning and the retry hint no longer appear, and the sidebar help text now says "inspect the store". Inspection, the status rows and Show backup in Finder for an earlier receipt stay. The repository, use case and engine `state-recover` path are unchanged.

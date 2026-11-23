@@ -135,7 +135,7 @@ struct CtlDecodingTests {
         // then
         #expect(v == "15")
         let message = ToolError.unsupportedVersion(tool: "harflow-ctl", version: "15").message
-        #expect(message.contains("understands version 1"))
+        #expect(message == "harflow-ctl answered with contract version 15; this app understands version 1. Update the app or harflow so they match.")
         guard case .failure(.unsupportedVersion(_, let none)) = CtlDocument.decode(
             stdout: json(#"{"product":"harflow","format":"harflow.ctl","product_version":"0.0.1","tasks":[]}"#),
             stderr: "", exitCode: 0, command: "list"

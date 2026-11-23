@@ -1,8 +1,9 @@
 import Foundation
 
 /// The one `"v"` this app understands for `events.jsonl` lines — a contract separate from
-/// `harflow-ctl`'s (`ctlContractVersions`, `CtlModels.swift`) and `harflow-setup`'s
-/// (`setupContractVersion`, `SetupClient.swift`), so a shape change to one never silently widens
+/// `harflow-ctl`'s (`ctlContractVersions`, `CtlModels.swift`), `harflow-setup`'s
+/// (`setupContractVersion`, `SetupClient.swift`) and version-info's (`versionInfoContractVersion`,
+/// `WireContracts.swift`), so a shape change to one never silently widens
 /// what the app accepts from the others. A line at any other version simply fails to decode
 /// (`TaskEvent.init?` returns nil), the same as any other malformed line — a new event kind, not a
 /// new log version, is how the log stays readable by an older app (see `EVENT_KINDS`).

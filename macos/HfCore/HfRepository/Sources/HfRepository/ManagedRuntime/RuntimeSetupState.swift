@@ -46,14 +46,14 @@ public enum RuntimeSetupState: Equatable, Sendable {
         switch self {
         case .checking: return "Checking the managed installation on this Mac."
         case .installationRequired(let installed, let required):
-            if let installed { return "Installed engine \(installed). This app requires engine \(required)." }
-            return "Install the components Harflow needs to run. Required engine: \(required)."
+            if let installed { return "Installed runtime \(installed). This app requires runtime \(required)." }
+            return "Install the components Harflow needs to run. Required runtime: \(required)."
         case .installing: return "Installing required components for this app."
         case .updating(let installed, let required):
-            return "Installing the update from engine \(installed) to \(required). "
+            return "Installing the update from runtime \(installed) to \(required). "
                 + "Your task history is preserved during the update."
         case .updateFailed(let message, let installed, let required):
-            return "Installed engine \(installed); required engine \(required). "
+            return "Installed runtime \(installed); required runtime \(required). "
                 + "Your history and existing installation have been kept. \(message)"
         case .failed(let message): return message
         case .ready: return "MCP registrations are managed separately in Harnesses."
