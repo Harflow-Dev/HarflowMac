@@ -99,7 +99,6 @@ struct ManagedRuntimeBoundaryTests {
         let install = ManagedInstallRepository(coordinator: coordinator, taskListRepository: NullTaskListRepository())
         #expect(install.state == .failed(stage: .harflow, message: "fixture runtime failure"))
         #expect(install.lastCheckMessage == "fixture runtime failure")
-        #expect(install.installAnywayBlockedMessage == nil)
     }
 
     @Test func givenProductionModule_whenInitialized_thenManagedRepositoriesAreWired() {

@@ -48,7 +48,6 @@ final class HarnessesViewModelMock: HarnessesViewModel {
     func didTapInstall(_: HarnessRow) {}
     func didTapRemove(_: HarnessRow) {}
     func didTapInstallBannerPrimary() {}
-    func didTapInstallBannerSecondary() {}
     func didTapInstallBannerDismiss() {}
     
     /// `HarnessRow` has no public initializer — built through the same public

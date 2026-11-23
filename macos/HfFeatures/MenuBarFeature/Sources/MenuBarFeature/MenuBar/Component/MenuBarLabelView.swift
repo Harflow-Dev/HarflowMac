@@ -124,7 +124,6 @@ private final class MenuBarLabelPreviewModel: MenuBarViewModel {
     func didTapNewSession() {}
     func didCaptureWindowOpener(_: @escaping () -> Void) {}
     func didTapInstallBannerPrimary() {}
-    func didTapInstallBannerSecondary() {}
     func didTapInstallBannerDismiss() {}
 }
 

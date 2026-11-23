@@ -88,11 +88,13 @@ final class MenuBarViewModelMock: MenuBarViewModel {
         )
     }
 
-    static var installNeeded: MenuBarViewModelMock {
+    static var runtimeFailed: MenuBarViewModelMock {
         MenuBarViewModelMock(installBannerModel: .init(
-            title: "harflow isn't installed",
-            detail: "harflow-ctl wasn't found in ~/.local/bin, /opt/homebrew/bin, /usr/local/bin.",
-            primaryTitle: "Install harflow"
+            title: "Harflow runtime preparation failed",
+            detail: "The managed runtime is unavailable. Try again to prepare it.",
+            primaryTitle: "Try again",
+            errorText: "Runtime preparation failed.",
+            canDismiss: true
         ))
     }
 
@@ -107,7 +109,6 @@ final class MenuBarViewModelMock: MenuBarViewModel {
     func didTapNewSession() {}
     func didCaptureWindowOpener(_: @escaping () -> Void) {}
     func didTapInstallBannerPrimary() {}
-    func didTapInstallBannerSecondary() {}
     func didTapInstallBannerDismiss() {}
 }
 

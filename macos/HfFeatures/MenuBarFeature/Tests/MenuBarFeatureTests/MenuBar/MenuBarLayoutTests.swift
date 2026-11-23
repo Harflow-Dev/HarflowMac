@@ -452,6 +452,5 @@ import Testing
     func didTapNewSession() { newSessionCount += 1 }
     func didCaptureWindowOpener(_: @escaping () -> Void) {}
     func didTapInstallBannerPrimary() {}
-    func didTapInstallBannerSecondary() {}
     func didTapInstallBannerDismiss() {}
 }

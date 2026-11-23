@@ -19,7 +19,6 @@ final class MenuBarViewRepository: MenuBarUseCase, MenuBarCountAvailabilityUseCa
     
     @GlobalEnvironment(\.taskListRepository) private var taskListRepository
     @GlobalEnvironment(\.eventStreamRepository) private var eventStreamRepository
-    @GlobalEnvironment(\.toolEnvironmentRepository) private var toolEnvironmentRepository
     @GlobalEnvironment(\.installRepository) private var installRepository
     @GlobalEnvironment(\.approvalResponseOwner) private var approvalResponseOwner
     @GlobalEnvironment(\.needsYouRepository) private var needsYouRepository
@@ -48,12 +47,10 @@ final class MenuBarViewRepository: MenuBarUseCase, MenuBarCountAvailabilityUseCa
     init(
         taskListRepository: (any TaskListRepository)? = nil,
         eventStreamRepository: (any EventStreamRepository)? = nil,
-        toolEnvironmentRepository: (any ToolEnvironmentRepository)? = nil,
         installRepository: (any InstallRepository)? = nil
     ) {
         if let taskListRepository { self.taskListRepository = taskListRepository }
         if let eventStreamRepository { self.eventStreamRepository = eventStreamRepository }
-        if let toolEnvironmentRepository { self.toolEnvironmentRepository = toolEnvironmentRepository }
         if let installRepository { self.installRepository = installRepository }
     }
     
@@ -89,29 +86,6 @@ final class MenuBarViewRepository: MenuBarUseCase, MenuBarCountAvailabilityUseCa
     var installState: InstallState { installRepository.state }
     func lastCheckMessagePublisher() -> AnyPublisher<String?, Never> { installRepository.lastCheckMessagePublisher() }
     var lastCheckMessage: String? { installRepository.lastCheckMessage }
-    func installAnywayBlockedMessagePublisher() -> AnyPublisher<String?, Never> { installRepository.installAnywayBlockedMessagePublisher() }
-    var installAnywayBlockedMessage: String? { installRepository.installAnywayBlockedMessage }
-    func installDestination() -> String? { installRepository.destination() }
-    func install() async { await installRepository.install() }
-    func installUvThenHarflow() async { await installRepository.installUvThenHarflow() }
     func retry() async { await installRepository.retry() }
-    func checkAgain() async { await installRepository.checkAgain() }
-    @discardableResult
-    func installAnyway() async -> Bool { await installRepository.installAnyway() }
     func reset() { installRepository.reset() }
-
-    func installNeed(for error: ToolError) -> InstallNeed? {
-        InstallCommands.installNeed(
-            for: error,
-            ctl: presence(toolEnvironmentRepository.locator.locate("harflow-ctl")),
-            setup: presence(toolEnvironmentRepository.locator.locate("harflow-setup"))
-        )
-    }
-
-    private func presence(_ result: Result<String, ToolError>) -> ToolPresence {
-        switch result {
-        case .success(let path): .found(path: path)
-        case .failure: .notFound
-        }
-    }
 }

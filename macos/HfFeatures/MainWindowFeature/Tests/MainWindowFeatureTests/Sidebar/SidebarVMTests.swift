@@ -182,8 +182,8 @@ import Testing
         #expect(sut.emptyStateMessage == "No tasks yet. Tasks started through harflow appear here.")
     }
     
-    @Test func givenAListErrorThatIsNotAnInstallNeed_whenListed_thenTheEmptyStateDoesNotShowAndTheMessageForwards() async {
-        // given — a plain (non-install-need) error still takes the old red-text path.
+    @Test func givenAPlainListError_whenListed_thenTheEmptyStateDoesNotShowAndTheMessageForwards() async {
+        // given — a plain list error takes the red-text path.
         let harness = makeSUT()
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject

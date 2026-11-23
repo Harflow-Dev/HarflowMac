@@ -12,7 +12,7 @@ import Testing
 @MainActor
 extension MenuBarVMTests {
 
-    // MARK: - Install banner (settled plan, section 5)
+    // MARK: - Install banner
 
     @Test func givenDidDisappear_whenTheInstallStatePublishes_thenTheBannerStillUpdates() async {
         // given — the install-state subscription joins the core group (settled plan, section 5):
@@ -24,80 +24,28 @@ extension MenuBarVMTests {
         sut.didDisappear()
 
         // when
-        installStateSubject.send(.needsGit)
+        installStateSubject.send(.failed(stage: .harflow, message: "fixture failure"))
 
         // then
         await waitUntil { sut.installBannerModel != nil }
-        #expect(sut.installBannerModel?.title == "git is needed to install harflow")
+        #expect(sut.installBannerModel?.title == "Harflow runtime preparation failed")
     }
 
-    // MARK: - Install banner (settled plan, section 5)
-
-    /// `publishDialog` dispatches via `Task { @MainActor in ... }`, not synchronously.
-    private func waitForDialog(_ sut: MenuBarVM, publish: () -> Void) async -> (dialog: AlertContent, cancellable: AnyCancellable) {
-        var published: AlertContent?
-        let cancellable = sut.objectDidPublishViewEvent.publisher.sink { event in
-            if case .dialog(let dialog) = event { published = dialog }
-        }
-        publish()
-        await waitUntil { published != nil }
-        return (published!, cancellable)
-    }
-
-    @Test func givenNeedsGit_whenPrimaryTapped_thenInstallIsCalledDirectlyWithNoDialog() async {
+    @Test func givenFailed_whenPrimaryTapped_thenRetryIsCalled() async {
         // given
-        let harness = makeSUT(installState: .needsGit)
+        let harness = makeSUT(installState: .failed(stage: .harflow, message: "fixture failure"))
         let sut = harness.sut
         let useCase = harness.useCase
         sut.didAppear()
         await waitUntil { sut.installBannerModel != nil }
         #expect(sut.installBannerModel?.primaryTitle == "Try again")
+        #expect(sut.installBannerModel?.errorText == "fixture failure")
 
         // when
         sut.didTapInstallBannerPrimary()
 
         // then
-        await verify(useCase).install().calledEventually(1, before: .seconds(5))
-    }
-
-    @Test func givenNeedsUv_whenPrimaryTapped_thenTheInstallUvDialogPublishes_andConfirmCallsInstallUvThenHarflow() async {
-        // given
-        let harness = makeSUT(installState: .needsUv)
-        let sut = harness.sut
-        let useCase = harness.useCase
-        sut.didAppear()
-        await waitUntil { sut.installBannerModel != nil }
-
-        // when
-        let (dialog, cancellable) = await waitForDialog(sut) { sut.didTapInstallBannerPrimary() }
-        #expect(dialog.title == "Install uv?")
-        dialog.actions.first?.action()
-
-        // then
-        await verify(useCase).installUvThenHarflow().calledEventually(1, before: .seconds(5))
-        withExtendedLifetime(cancellable) {}
-    }
-
-    @Test func givenUnresolved_whenSecondaryTapped_thenTheInstallAnywayDialogPublishes_andConfirmCallsInstallAnyway() async {
-        // given
-        let harness = makeSUT(installState: .unresolved(stage: .harflow))
-        let sut = harness.sut
-        let useCase = harness.useCase
-        harness.installDestinationBox.value = "/Users/x/.local/bin"
-        sut.didAppear()
-        await waitUntil { sut.installBannerModel != nil }
-        #expect(sut.installBannerModel?.primaryTitle == "Check again")
-        #expect(sut.installBannerModel?.secondaryTitle == "Install anyway")
-
-        // when
-        let (dialog, cancellable) = await waitForDialog(sut) { sut.didTapInstallBannerSecondary() }
-        #expect(dialog.title == "Install anyway?")
-        #expect(dialog.description?.contains("Installs into /Users/x/.local/bin.") == true)
-        dialog.actions.first?.action()
-
-        // then
-        await verify(useCase).installAnyway().calledEventually(1, before: .seconds(5))
-        withExtendedLifetime(cancellable) {}
+        await verify(useCase).retry().calledEventually(1, before: .seconds(5))
     }
 
     @Test func givenRunning_whenShown_thenIsBusyIsTrueAndThereIsNoPrimary() async {
@@ -111,26 +59,6 @@ extension MenuBarVMTests {
         #expect(sut.installBannerModel?.isBusy == true)
         #expect(sut.installBannerModel?.primaryTitle == nil)
         #expect(sut.installBannerModel?.title == "Checking…")
-    }
-
-    @Test func givenAStaleConfirm_whenTheStateChangedBeforeConfirming_thenInstallUvThenHarflowIsNotCalled() async {
-        // given — the state changes between the dialog publishing and the person confirming it.
-        let harness = makeSUT(installState: .needsUv)
-        let sut = harness.sut
-        let useCase = harness.useCase
-        let installStateSubject = harness.installStateSubject
-        sut.didAppear()
-        await waitUntil { sut.installBannerModel != nil }
-        let (dialog, cancellable) = await waitForDialog(sut) { sut.didTapInstallBannerPrimary() }
-
-        // when — an install elsewhere completed the uv stage before this dialog was confirmed.
-        installStateSubject.send(.running(.harflow))
-        await waitUntil { sut.installBannerModel?.isBusy == true }
-        dialog.actions.first?.action()
-
-        // then
-        verify(useCase).installUvThenHarflow().called(0)
-        withExtendedLifetime(cancellable) {}
     }
 
     @Test func givenInstalled_whenShown_thenTheSuccessBannerHasTheFootnoteAndCanDismiss() async {
@@ -147,8 +75,7 @@ extension MenuBarVMTests {
     }
 
     @Test func givenInstalledWithACurrentListError_whenShown_thenTheErrorOutranksTheSuccessBanner() async {
-        // given — R2-2: a current tool error that isn't an install need always outranks the success
-        // banner.
+        // given — R2-2: a current tool error always outranks the success banner.
         let harness = makeSUT(installState: .installed)
         let sut = harness.sut
         let listErrorSubject = harness.listErrorSubject

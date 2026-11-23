@@ -68,3 +68,5 @@ Root AGENTS.md applies (`../../AGENTS.md`). Read this module's `README.md` befor
   failure, never a fabricated root or partial history/title insertion. Legacy resolve stays separate.
 
 - `ToolError.displayMessage` (`Support/ToolError+Refusal.swift`) is a refusal's own sentence without its "(code)" suffix; use it only where the code is shown on a separate detail line (the area A gates and store rows), never for takeover or messaging, which keep `ToolError.message`. `StoreAttention` (`StateRecovery/`) is the one title, message and detail rule for a store refusal, shared by Settings and the main window.
+
+- `MissingFeature.sentence(canDo:)` (`Support/MissingFeature.swift`) is the one plain sentence for a feature the selected runtime does not advertise ("This Harflow runtime can't <do X>. Update Harflow to use it."), shared by Settings, the menu bar and the main window. It names no command, socket or daemon and offers no install action. `InstallRepository` only reflects the managed runtime (`.running`, `.failed`, `.installed`); the legacy uv/GitHub installer, its stages and its confirmation dialogs no longer exist.

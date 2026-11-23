@@ -42,21 +42,19 @@ import Testing
     private func makeSUT(
         status: Result<SetupDocument, ToolError> = .success(HarnessesVMTests.document(HarnessesVMTests.emptyDocumentJSON)),
         locate: Result<SetupClient, ToolError> = .success(HarnessesVMTests.setupClient),
-        installState: InstallState = .idle,
-        installNeed: @escaping (ToolError) -> InstallNeed? = { _ in nil }
+        installState: InstallState = .idle
     ) -> (sut: HarnessesVM, useCase: MockHarnessesUseCase) {
         let useCase = MockHarnessesUseCase()
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).qualificationBackends().willReturn([])
         given(useCase).status().willReturn(status)
         given(useCase).locate().willReturn(locate)
-        Self.stubInstall(useCase, installState: installState, installNeed: installNeed)
+        Self.stubInstall(useCase, installState: installState)
         let sut = HarnessesVM(useCase: useCase)
         return (sut, useCase)
     }
 
-    /// Every `HarnessesVM` construction reads `installState`/`lastCheckMessage`/
-    /// `installAnywayBlockedMessage` in `init`, and `didAppear()` subscribes to their publishers —
+    /// Every `HarnessesVM` construction reads `installState` and `lastCheckMessage` in `init`, and `didAppear()` subscribes to their publishers —
     /// so any test building its own `MockHarnessesUseCase` (bypassing `makeSUT`) needs these
     /// defaults too, or Mockable fatals on the unstubbed member.
     static func stubInstall(
@@ -65,8 +63,6 @@ import Testing
         installStatePublisher: AnyPublisher<InstallState, Never>? = nil,
         runtimeSetupPublisher: AnyPublisher<RuntimeSetupState, Never>? = nil,
         lastCheckMessagePublisher: AnyPublisher<String?, Never>? = nil,
-        installAnywayBlockedMessagePublisher: AnyPublisher<String?, Never>? = nil,
-        installNeed: @escaping (ToolError) -> InstallNeed? = { _ in nil },
         onReset: @escaping () -> Void = {}
     ) {
         given(useCase).runtimeSetupPublisher().willReturn(runtimeSetupPublisher ?? Just(.ready).eraseToAnyPublisher())
@@ -74,15 +70,7 @@ import Testing
         given(useCase).installStatePublisher().willReturn(installStatePublisher ?? Empty().eraseToAnyPublisher())
         given(useCase).lastCheckMessage.willReturn(nil)
         given(useCase).lastCheckMessagePublisher().willReturn(lastCheckMessagePublisher ?? Empty().eraseToAnyPublisher())
-        given(useCase).installAnywayBlockedMessage.willReturn(nil)
-        given(useCase).installAnywayBlockedMessagePublisher().willReturn(installAnywayBlockedMessagePublisher ?? Empty().eraseToAnyPublisher())
-        given(useCase).installNeed(for: .any).willProduce(installNeed)
-        given(useCase).installDestination().willReturn(nil)
-        given(useCase).install().willReturn()
-        given(useCase).installUvThenHarflow().willReturn()
         given(useCase).retry().willReturn()
-        given(useCase).checkAgain().willReturn()
-        given(useCase).installAnyway().willReturn(true)
         given(useCase).reset().willProduce(onReset)
     }
     
@@ -118,7 +106,7 @@ import Testing
         #expect(sut.errorMessage == nil)
     }
     
-    @Test func givenAppear_whenStatusFailsWithANonInstallNeed_thenTheErrorMessageIsSet() async {
+    @Test func givenAppear_whenStatusFailsWithARefusal_thenTheErrorMessageIsSet() async {
         // given
         let failure = ToolError.refused(code: "denied", message: "harflow-setup refused the request.")
         let (sut, _) = makeSUT(status: .failure(failure))
@@ -133,32 +121,21 @@ import Testing
         #expect(sut.installBannerModel == nil)
     }
 
-    // Moved from a `.message`-forwarding assertion (settled plan, section 7): a `notFound` error
-    // for `harflow-ctl`/`harflow-setup` is an install need, so it now shows the banner instead
-    // of the plain red `errorMessage`.
-    @Test func givenAppear_whenStatusFailsWithAnInstallNeed_thenTheBannerShowsInsteadOfTheRedText() async {
+    @Test func givenAppear_whenStatusFailsWithAnUnsupportedCommand_thenThePlainMessageShowsAndNoBanner() async {
         // given
-        let failure = ToolError.notFound(tool: "harflow-setup", searched: ["/usr/local/bin"])
-        let useCase = MockHarnessesUseCase()
-        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
-        given(useCase).qualificationBackends().willReturn([])
-        given(useCase).status().willReturn(.failure(failure))
-        given(useCase).locate().willReturn(.success(Self.setupClient))
-        Self.stubInstall(useCase, installNeed: { $0 == failure ? .incomplete : nil })
-        let sut = HarnessesVM(useCase: useCase)
+        let failure = ToolError.unsupportedCommand(tool: "harflow-setup", command: "status", detail: "unrecognized")
+        let (sut, _) = makeSUT(status: .failure(failure))
 
         // when
         sut.didAppear()
 
         // then
-        await waitUntil { sut.installBannerModel != nil }
-        #expect(sut.errorMessage == nil)
+        await waitUntil { sut.errorMessage != nil }
+        #expect(sut.errorMessage == failure.message)
         #expect(sut.rows.isEmpty)
-        #expect(sut.installBannerModel?.title == "harflow is incomplete or out of date")
-        #expect(sut.installBannerModel?.detail == failure.message)
-        #expect(sut.installBannerModel?.primaryTitle == "Update harflow")
+        #expect(sut.installBannerModel == nil)
     }
-    
+
     @Test func givenALoadCompletes_whenObserved_thenIsLoadingEndsFalseAndRefreshIsNotDisabled() async {
         // given — Mockable's generated `willProduce` for an `async` member takes a synchronous
         // producer (confirmed against the framework source: `FunctionReturnBuilder.willProduce`
@@ -352,37 +329,6 @@ import Testing
 
     // MARK: - Install banner (settled plan, section 5)
 
-    @Test func givenNeedsGit_whenPrimaryTapped_thenInstallIsCalledDirectlyWithNoDialog() async {
-        // given
-        let (sut, useCase) = makeSUT(installState: .needsGit)
-        sut.didAppear()
-        await waitUntil { sut.installBannerModel != nil }
-        #expect(sut.installBannerModel?.title == "git is needed to install harflow")
-        #expect(sut.installBannerModel?.primaryTitle == "Try again")
-
-        // when
-        sut.didTapInstallBannerPrimary()
-
-        // then
-        await verify(useCase).install().calledEventually(1, before: .seconds(5))
-    }
-
-    @Test func givenNeedsUv_whenPrimaryTapped_thenTheInstallUvDialogPublishes_andConfirmCallsInstallUvThenHarflow() async {
-        // given
-        let (sut, useCase) = makeSUT(installState: .needsUv)
-        sut.didAppear()
-        await waitUntil { sut.installBannerModel != nil }
-
-        // when
-        let (dialog, cancellable) = await waitForDialog(sut) { sut.didTapInstallBannerPrimary() }
-        #expect(dialog.title == "Install uv?")
-        dialog.actions.first?.action()
-
-        // then
-        await verify(useCase).installUvThenHarflow().calledEventually(1, before: .seconds(5))
-        withExtendedLifetime(cancellable) {}
-    }
-
     @Test func givenFailed_whenPrimaryTapped_thenRetryIsCalledDirectlyWithNoDialog() async {
         // given
         let (sut, useCase) = makeSUT(installState: .failed(stage: .harflow, message: "Installing harflow failed."))
@@ -398,54 +344,6 @@ import Testing
         await verify(useCase).retry().calledEventually(1, before: .seconds(5))
     }
 
-    @Test func givenUnresolved_whenPrimaryTapped_thenCheckAgainIsCalledDirectlyWithNoDialog() async {
-        // given
-        let (sut, useCase) = makeSUT(installState: .unresolved(stage: .harflow))
-        sut.didAppear()
-        await waitUntil { sut.installBannerModel != nil }
-        #expect(sut.installBannerModel?.primaryTitle == "Check again")
-        #expect(sut.installBannerModel?.secondaryTitle == "Install anyway")
-
-        // when
-        sut.didTapInstallBannerPrimary()
-
-        // then
-        await verify(useCase).checkAgain().calledEventually(1, before: .seconds(5))
-    }
-
-    @Test func givenUnresolved_whenSecondaryTapped_thenTheInstallAnywayDialogPublishes_andConfirmCallsInstallAnyway() async {
-        // given
-        let (sut, useCase) = makeSUT(installState: .unresolved(stage: .harflow))
-        sut.didAppear()
-        await waitUntil { sut.installBannerModel != nil }
-
-        // when
-        let (dialog, cancellable) = await waitForDialog(sut) { sut.didTapInstallBannerSecondary() }
-        #expect(dialog.title == "Install anyway?")
-        dialog.actions.first?.action()
-
-        // then
-        await verify(useCase).installAnyway().calledEventually(1, before: .seconds(5))
-        withExtendedLifetime(cancellable) {}
-    }
-
-    @Test func givenAnIncompleteInstallNeed_whenPrimaryTapped_thenTheUpdateDialogPublishes_andConfirmCallsInstall() async {
-        // given
-        let failure = ToolError.notFound(tool: "harflow-setup", searched: [])
-        let (sut, useCase) = makeSUT(status: .failure(failure), installNeed: { $0 == failure ? .incomplete : nil })
-        sut.didAppear()
-        await waitUntil { sut.installBannerModel?.primaryTitle == "Update harflow" }
-
-        // when
-        let (dialog, cancellable) = await waitForDialog(sut) { sut.didTapInstallBannerPrimary() }
-        #expect(dialog.title == "Update harflow?")
-        dialog.actions.first?.action()
-
-        // then
-        await verify(useCase).install().calledEventually(1, before: .seconds(5))
-        withExtendedLifetime(cancellable) {}
-    }
-
     @Test func givenRunning_whenShown_thenIsBusyIsTrueAndThereIsNoPrimary() async {
         // given
         let (sut, _) = makeSUT(installState: .running(.harflow))
@@ -456,57 +354,6 @@ import Testing
         #expect(sut.installBannerModel?.isBusy == true)
         #expect(sut.installBannerModel?.primaryTitle == nil)
         #expect(sut.installBannerModel?.detail == "Preparing the exact paired runtime. This can take a few minutes.")
-    }
-
-    @Test func givenAStaleConfirm_whenTheStateChangedBeforeConfirming_thenInstallUvThenHarflowIsNotCalled() async {
-        // given — the state changes between the dialog publishing and the person confirming it.
-        let useCase = MockHarnessesUseCase()
-        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
-        given(useCase).qualificationBackends().willReturn([])
-        given(useCase).status().willReturn(.success(document(HarnessesVMTests.emptyDocumentJSON)))
-        given(useCase).locate().willReturn(.success(Self.setupClient))
-        let installStateSubject = PassthroughSubject<InstallState, Never>()
-        Self.stubInstall(useCase, installState: .needsUv, installStatePublisher: installStateSubject.eraseToAnyPublisher())
-        let sut = HarnessesVM(useCase: useCase)
-        sut.didAppear()
-        await waitUntil { sut.installBannerModel != nil }
-        let (dialog, cancellable) = await waitForDialog(sut) { sut.didTapInstallBannerPrimary() }
-
-        // when — an install started elsewhere already moved past `needsUv` before this dialog was confirmed.
-        installStateSubject.send(.running(.uv))
-        await waitUntil { sut.installBannerModel?.isBusy == true }
-        dialog.actions.first?.action()
-
-        // then
-        verify(useCase).installUvThenHarflow().called(0)
-        withExtendedLifetime(cancellable) {}
-    }
-
-    @Test func givenUnresolvedWithAnInstallAnywayBlockedMessage_whenShown_thenItOutranksTheLastCheckMessage() async {
-        // given
-        let useCase = MockHarnessesUseCase()
-        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
-        given(useCase).qualificationBackends().willReturn([])
-        given(useCase).status().willReturn(.success(document(HarnessesVMTests.emptyDocumentJSON)))
-        given(useCase).locate().willReturn(.success(Self.setupClient))
-        let lastCheckMessageSubject = PassthroughSubject<String?, Never>()
-        let installAnywayBlockedMessageSubject = PassthroughSubject<String?, Never>()
-        Self.stubInstall(
-            useCase, installState: .unresolved(stage: .uv),
-            lastCheckMessagePublisher: lastCheckMessageSubject.eraseToAnyPublisher(),
-            installAnywayBlockedMessagePublisher: installAnywayBlockedMessageSubject.eraseToAnyPublisher()
-        )
-        let sut = HarnessesVM(useCase: useCase)
-        sut.didAppear()
-        lastCheckMessageSubject.send("The install may still be finishing.")
-        await waitUntil { sut.installBannerModel?.errorText == "The install may still be finishing." }
-
-        // when
-        installAnywayBlockedMessageSubject.send("Install anyway is refused until an earlier install is confirmed stopped.")
-
-        // then
-        await waitUntil { sut.installBannerModel?.errorText == "Install anyway is refused until an earlier install is confirmed stopped." }
-        #expect(sut.installBannerModel?.errorText == "Install anyway is refused until an earlier install is confirmed stopped.")
     }
 
     @Test func givenInstalled_whenShown_thenTheSuccessBannerHasTheFootnoteAndCanDismiss() async {
@@ -523,8 +370,7 @@ import Testing
     }
 
     @Test func givenInstalledWithACurrentLoadError_whenShown_thenTheErrorOutranksTheSuccessBanner() async {
-        // given — R2-2: a current tool error that isn't an install need always outranks the success
-        // banner. The load error is set by a `load()` that ran before installation completed.
+        // given — a current tool error always outranks the success banner. The load error is set by a `load()` that ran before installation completed.
         let failure = ToolError.launchFailed(tool: "harflow-setup", detail: "crashed")
         let (sut, _) = makeSUT(status: .failure(failure), installState: .installed)
 

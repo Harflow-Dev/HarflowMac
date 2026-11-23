@@ -434,7 +434,7 @@ import Testing
         await waitUntil { sut.catalog.state == .available }
 
         // when — a later, unrelated state change is a no-op; only `.installed` triggers a refresh.
-        stateSubject.send(.needsGit)
+        stateSubject.send(.running(.validate))
         stateSubject.send(.installed)
 
         // then

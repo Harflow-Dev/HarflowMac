@@ -30,14 +30,8 @@ import Testing
         func statePublisher() -> AnyPublisher<InstallState, Never> { Just(.installed).eraseToAnyPublisher() }
         var lastCheckMessage: String? { nil }
         func lastCheckMessagePublisher() -> AnyPublisher<String?, Never> { Just(nil).eraseToAnyPublisher() }
-        var installAnywayBlockedMessage: String? { nil }
-        func installAnywayBlockedMessagePublisher() -> AnyPublisher<String?, Never> { Just(nil).eraseToAnyPublisher() }
-        func destination() -> String? { nil }
         func install() async { installCounter.increment() }
-        func installUvThenHarflow() async {}
         func retry() async {}
-        func checkAgain() async {}
-        func installAnyway() async -> Bool { false }
         func reset() {}
     }
 

@@ -18,3 +18,5 @@ The status-bar item: `MenuBarLabel` (icon + running count, always alive) and the
   (unconditional) on the test target.
 - Tests use Swift Testing (`givenX_whenY_thenZ`, `// given / when / then`), Mockable-generated
   `Mock*` types, and `waitUntil` from `HfTestUtilities`.
+
+The popover's install banner reflects only the managed runtime (preparing or checking, failed with Try again, installed). A list error that used to be classified as an install need is shown as the plain list error. Final copy for those states belongs to the menu bar design pinned at HarflowDesign `8ec4d38`.

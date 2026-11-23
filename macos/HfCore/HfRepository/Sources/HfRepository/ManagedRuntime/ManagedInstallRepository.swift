@@ -59,13 +59,7 @@ public final class ManagedInstallRepository: InstallRepository, @unchecked Senda
 .eraseToAnyPublisher()
     }
 
-    public var installAnywayBlockedMessage: String? { nil }
-    public func installAnywayBlockedMessagePublisher() -> AnyPublisher<String?, Never> { Just(nil).eraseToAnyPublisher() }
-    public func destination() -> String? { nil }
     public func install() async { await retry() }
-    public func installUvThenHarflow() async {}
-    public func checkAgain() async { await retry() }
-    public func installAnyway() async -> Bool { false }
     public func reset() {
         switch coordinator.state {
         case .ready:

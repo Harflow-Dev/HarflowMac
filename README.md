@@ -58,6 +58,8 @@ The title bar shows Harflow's engine connection status. Choose Light, Dark, or S
 
 After an install or update, its success notice appears in the menu bar popover. The notice ends when the app quits, and reopening with an up-to-date engine does not show it again. Runtime readiness and Settings setup controls remain available.
 
+The menu bar and Settings → Harnesses banner only reflects the managed runtime: preparing or checking, failed with Try again, and the success notice. Harflow never installs or updates the runtime from GitHub or with uv. When the runtime lacks a feature a screen needs, that screen says "This Harflow runtime can't <do something>. Update Harflow to use it." and leaves the rest usable.
+
 Store incompatibility retains the qualified runtime and shows a sidebar attention entry. Settings → General offers read-only inspection of the task store and its status. The backup, reset and resume actions are hidden until the task store is redesigned; the engine's own recovery command is unchanged. Show backup in Finder is hidden with them. Settings → General lists Appearance (System, Light or Dark, shared with the sidebar footer), Behaviour, Harflow runtime and Task store, in that order; the Task store row waits until the runtime is ready. See the [managed runtime guide](docs/managed-runtime.md#store-readiness-and-recovery).
 
 See [managed runtime](docs/managed-runtime.md) for acquisition, storage, retry, and current distribution limits.

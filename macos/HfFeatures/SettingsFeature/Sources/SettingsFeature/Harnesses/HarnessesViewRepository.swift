@@ -67,29 +67,6 @@ final class HarnessesViewRepository: HarnessesUseCase, @unchecked Sendable {
     var installState: InstallState { installRepository.state }
     func lastCheckMessagePublisher() -> AnyPublisher<String?, Never> { installRepository.lastCheckMessagePublisher() }
     var lastCheckMessage: String? { installRepository.lastCheckMessage }
-    func installAnywayBlockedMessagePublisher() -> AnyPublisher<String?, Never> { installRepository.installAnywayBlockedMessagePublisher() }
-    var installAnywayBlockedMessage: String? { installRepository.installAnywayBlockedMessage }
-    func installDestination() -> String? { installRepository.destination() }
-    func install() async { await installRepository.install() }
-    func installUvThenHarflow() async { await installRepository.installUvThenHarflow() }
     func retry() async { await installRepository.retry() }
-    func checkAgain() async { await installRepository.checkAgain() }
-    @discardableResult
-    func installAnyway() async -> Bool { await installRepository.installAnyway() }
     func reset() { installRepository.reset() }
-
-    func installNeed(for error: ToolError) -> InstallNeed? {
-        InstallCommands.installNeed(
-            for: error,
-            ctl: presence(toolEnvironmentRepository.locator.locate("harflow-ctl")),
-            setup: presence(toolEnvironmentRepository.locator.locate("harflow-setup"))
-        )
-    }
-
-    private func presence(_ result: Result<String, ToolError>) -> ToolPresence {
-        switch result {
-        case .success(let path): .found(path: path)
-        case .failure: .notFound
-        }
-    }
 }

@@ -255,6 +255,32 @@ import Testing
         #expect(sut.canInspect)
     }
 
+    @Test func givenInspectionFailureThatIsAMissingStateInspectCommand_whenPresenting_thenTheMissingFeatureSentenceShowsWithNoRows() {
+        // given
+        let error = ToolError.unsupportedCommand(tool: "harflow-ctl", command: "state-inspect", detail: "Missing capability state-recovery.v1")
+
+        // when
+        let sut = StoreRecoveryPresentation(state: .failed(error, inspection: nil))
+
+        // then
+        #expect(sut.title == "Task store needs attention")
+        #expect(sut.message == "This Harflow runtime can't inspect the task store. Update Harflow to use it.")
+        #expect(sut.rows.isEmpty)
+        #expect(sut.canInspect)
+    }
+
+    @Test func givenAnUnsupportedCommandForADifferentCommand_whenPresenting_thenTheToolMessageShowsNotTheMissingFeatureSentence() {
+        // given
+        let error = ToolError.unsupportedCommand(tool: "harflow-ctl", command: "state-recover", detail: "Missing capability state-recovery.v1")
+
+        // when
+        let sut = StoreRecoveryPresentation(state: .failed(error, inspection: nil))
+
+        // then
+        #expect(sut.message == error.displayMessage)
+        #expect(sut.message?.contains("Update Harflow") != true)
+    }
+
     @Test func givenInspectionFailureThatIsNotARefusal_whenPresenting_thenTheToolMessageShowsWithNoRows() {
         // given
         let error = ToolError.timedOut(tool: "harflow-ctl", seconds: 30)

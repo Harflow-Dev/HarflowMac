@@ -144,17 +144,26 @@ struct StoreRecoveryPresentation: Equatable {
                 self.glyph = .attention
                 applyEvidence(error)
             } else {
-                // The inspection itself failed: the failure message, and for a refusal the code on one detail line.
-                self.title = "Task store needs attention"
-                self.glyph = .attention
-                self.message = error.displayMessage
-                self.code = error.refusalCode
+                applyInspectionFailure(error)
             }
         }
         if !runtimeReady {
             self = Self.waiting(receipt: receipt)
         } else {
             self.showsInterruptedNote = interrupted && requestTitle == nil && !confirming && !busy
+        }
+    }
+
+    /// The inspection itself failed: the failure message, and for a refusal the code on one detail line. A runtime
+    /// without `state-recovery.v1` shows the missing-feature sentence instead of the tool text.
+    private mutating func applyInspectionFailure(_ error: ToolError) {
+        title = "Task store needs attention"
+        glyph = .attention
+        if case .unsupportedCommand(_, "state-inspect", _) = error {
+            message = MissingFeature.sentence(canDo: "inspect the task store")
+        } else {
+            message = error.displayMessage
+            code = error.refusalCode
         }
     }
 

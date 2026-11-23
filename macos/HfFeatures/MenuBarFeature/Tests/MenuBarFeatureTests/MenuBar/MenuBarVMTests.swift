@@ -73,10 +73,7 @@ import Testing
         let titleBox: Box<(String) -> String>
         let installStateSubject: PassthroughSubject<InstallState, Never>
         let lastCheckMessageSubject: PassthroughSubject<String?, Never>
-        let installAnywayBlockedMessageSubject: PassthroughSubject<String?, Never>
         let installStateBox: Box<InstallState>
-        let installNeedBox: Box<InstallNeed?>
-        let installDestinationBox: Box<String?>
         let runtimeReadySubject: PassthroughSubject<Bool, Never>
         let runtimeReadyBox: Box<Bool>
     }
@@ -103,10 +100,7 @@ import Testing
         let titleBox = Box<(String) -> String>({ "Task \($0.prefix(8))" })
         let installStateSubject = PassthroughSubject<InstallState, Never>()
         let lastCheckMessageSubject = PassthroughSubject<String?, Never>()
-        let installAnywayBlockedMessageSubject = PassthroughSubject<String?, Never>()
         let installStateBox = Box<InstallState>(installState)
-        let installNeedBox = Box<InstallNeed?>(nil)
-        let installDestinationBox = Box<String?>(nil)
         let runtimeReadySubject = PassthroughSubject<Bool, Never>()
         let runtimeReadyBox = Box(runtimeReady)
 
@@ -128,15 +122,7 @@ import Testing
         given(useCase).installStatePublisher().willReturn(installStateSubject.eraseToAnyPublisher())
         given(useCase).lastCheckMessage.willReturn(nil)
         given(useCase).lastCheckMessagePublisher().willReturn(lastCheckMessageSubject.eraseToAnyPublisher())
-        given(useCase).installAnywayBlockedMessage.willReturn(nil)
-        given(useCase).installAnywayBlockedMessagePublisher().willReturn(installAnywayBlockedMessageSubject.eraseToAnyPublisher())
-        given(useCase).installNeed(for: .any).willProduce { _ in installNeedBox.value }
-        given(useCase).installDestination().willProduce { installDestinationBox.value }
-        given(useCase).install().willReturn()
-        given(useCase).installUvThenHarflow().willReturn()
         given(useCase).retry().willReturn()
-        given(useCase).checkAgain().willReturn()
-        given(useCase).installAnyway().willReturn(true)
         given(useCase).reset().willReturn()
 
         let sut = MenuBarVM(useCase: useCase, routing: routing, visibility: visibility, scheduler: scheduler)
@@ -146,8 +132,7 @@ import Testing
             hasListedSubject: hasListedSubject, countsSubject: countsSubject, runningCountBox: runningCountBox,
             titlesSubject: titlesSubject, titleBox: titleBox,
             installStateSubject: installStateSubject, lastCheckMessageSubject: lastCheckMessageSubject,
-            installAnywayBlockedMessageSubject: installAnywayBlockedMessageSubject, installStateBox: installStateBox,
-            installNeedBox: installNeedBox, installDestinationBox: installDestinationBox,
+            installStateBox: installStateBox,
             runtimeReadySubject: runtimeReadySubject, runtimeReadyBox: runtimeReadyBox
         )
     }
@@ -303,7 +288,7 @@ import Testing
         #expect(sut.listErrorMessage == nil)
     }
     
-    @Test func givenAListErrorThatIsNotAnInstallNeed_whenObserved_thenTheMessageShowsAndIsConnectedIsFalse() async {
+    @Test func givenARefusedListError_whenObserved_thenTheMessageShowsAndIsConnectedIsFalse() async {
         // given
         let harness = makeSUT()
         let sut = harness.sut
@@ -323,32 +308,26 @@ import Testing
         #expect(sut.installBannerModel == nil)
     }
 
-    // Moved from a `.message`-forwarding assertion (settled plan, section 7): a `notFound` error
-    // for `harflow-ctl`/`harflow-setup` is an install need, so it now shows the banner instead
-    // of the plain red `listErrorMessage`.
-    @Test func givenAListErrorThatIsAnInstallNeed_whenObserved_thenTheBannerShowsInsteadOfTheRedText() async {
+    @Test func givenAnUnsupportedCommandListError_whenObserved_thenThePlainMessageShowsAndNoBanner() async {
         // given
         let harness = makeSUT()
         let sut = harness.sut
         let listErrorSubject = harness.listErrorSubject
         let hasListedSubject = harness.hasListedSubject
-        harness.installNeedBox.value = .missing
         sut.didAppear()
         hasListedSubject.send(true)
-        let failure = ToolError.notFound(tool: "harflow-ctl", searched: ["/usr/local/bin"])
+        let failure = ToolError.unsupportedCommand(tool: "harflow-ctl", command: "task-list-page", detail: "unrecognized")
 
         // when
         listErrorSubject.send(failure)
 
         // then
-        await waitUntil { sut.installBannerModel != nil }
-        #expect(sut.listErrorMessage == nil)
+        await waitUntil { sut.listErrorMessage != nil }
+        #expect(sut.listErrorMessage == failure.message)
         #expect(sut.isConnected == false)
-        #expect(sut.installBannerModel?.title == "harflow isn't installed")
-        #expect(sut.installBannerModel?.detail == failure.message)
-        #expect(sut.installBannerModel?.primaryTitle == "Install harflow")
+        #expect(sut.installBannerModel == nil)
     }
-    
+
     // MARK: - Selection
     
     @Test func givenAMenuBarSelection_whenOpened_thenItSelectsAndOpensTheWindow() {

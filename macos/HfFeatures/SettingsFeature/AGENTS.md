@@ -18,3 +18,5 @@ The Settings scene is built through `SettingsCoordinator`. General shows, in ord
   `Mock*` types, and `waitUntil` from `HfTestUtilities`.
 
 The Task store row shows a refusal's engine sentence (`ToolError.displayMessage`) without its code. The refusal code appears only as a "Code" detail row, and only when the refusal carries no engine reason or the inspection itself failed; the reason, title and state root come from `HfRepository.StoreAttention`.
+
+The Harnesses banner reflects only the managed runtime (preparing or checking, failed with Try again, installed). A load error that used to be classified as an install need is shown as the plain error line. Final copy for the missing-capability states belongs to the harness settings design pinned at HarflowDesign `8ec4d38`. A task store inspection that the runtime does not support (`state-inspect` unsupported) shows `MissingFeature.sentence(canDo: "inspect the task store")` in the Task store row, with no Code line.

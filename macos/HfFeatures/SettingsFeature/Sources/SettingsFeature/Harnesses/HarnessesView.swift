@@ -32,7 +32,6 @@ protocol HarnessesViewModel: ViewModel {
     func didTapInstall(_ row: HarnessRow)
     func didTapRemove(_ row: HarnessRow)
     func didTapInstallBannerPrimary()
-    func didTapInstallBannerSecondary()
     func didTapInstallBannerDismiss()
 }
 
@@ -79,7 +78,6 @@ struct HarnessesView<VM: HarnessesViewModel>: View {
                 InstallBanner(
                     model: bannerModel,
                     onPrimary: { viewModel.didTapInstallBannerPrimary() },
-                    onSecondary: { viewModel.didTapInstallBannerSecondary() },
                     onDismiss: { viewModel.didTapInstallBannerDismiss() }
                 )
             } else if let errorMessage = viewModel.errorMessage {
@@ -125,19 +123,23 @@ struct HarnessesView<VM: HarnessesViewModel>: View {
     HarnessesView(HarnessesViewModelMock()).preferredColorScheme(.dark)
 }
 
-#Preview("Harnesses, install banner - light") {
+#Preview("Harnesses, runtime failed - light") {
     HarnessesView(HarnessesViewModelMock(installBannerModel: .init(
-        title: "harflow isn't installed",
-        detail: "harflow-ctl wasn't found in ~/.local/bin, /opt/homebrew/bin, /usr/local/bin.",
-        primaryTitle: "Install harflow"
+        title: "Harflow runtime preparation failed",
+        detail: "The managed runtime is unavailable. Try again to prepare it.",
+        primaryTitle: "Try again",
+        errorText: "Runtime preparation failed.",
+        canDismiss: true
     ))).preferredColorScheme(.light)
 }
 
-#Preview("Harnesses, install banner - dark") {
+#Preview("Harnesses, runtime failed - dark") {
     HarnessesView(HarnessesViewModelMock(installBannerModel: .init(
-        title: "harflow isn't installed",
-        detail: "harflow-ctl wasn't found in ~/.local/bin, /opt/homebrew/bin, /usr/local/bin.",
-        primaryTitle: "Install harflow"
+        title: "Harflow runtime preparation failed",
+        detail: "The managed runtime is unavailable. Try again to prepare it.",
+        primaryTitle: "Try again",
+        errorText: "Runtime preparation failed.",
+        canDismiss: true
     ))).preferredColorScheme(.dark)
 }
 

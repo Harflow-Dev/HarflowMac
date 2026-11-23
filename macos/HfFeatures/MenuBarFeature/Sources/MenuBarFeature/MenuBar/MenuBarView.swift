@@ -71,7 +71,6 @@ protocol MenuBarViewModel: ViewModel {
     func didTapNewSession()
     func didCaptureWindowOpener(_ opener: @escaping () -> Void)
     func didTapInstallBannerPrimary()
-    func didTapInstallBannerSecondary()
     func didTapInstallBannerDismiss()
     /// The popover content appeared — the one reliable `MenuBarExtra` open signal. Distinct from
     /// `didAppear()`, which the always-on-screen label view also fires.
@@ -260,7 +259,6 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
             InstallBanner(
                 model: bannerModel,
                 onPrimary: { viewModel.didTapInstallBannerPrimary() },
-                onSecondary: { viewModel.didTapInstallBannerSecondary() },
                 onDismiss: { viewModel.didTapInstallBannerDismiss() }
             )
         } else if let listErrorMessage = viewModel.listErrorMessage {
@@ -489,7 +487,6 @@ private final class MenuBarPreviewModel: MenuBarViewModel {
     func didTapNewSession() {}
     func didCaptureWindowOpener(_: @escaping () -> Void) {}
     func didTapInstallBannerPrimary() {}
-    func didTapInstallBannerSecondary() {}
     func didTapInstallBannerDismiss() {}
 }
 
@@ -564,11 +561,11 @@ private func needsYouRows(_ count: Int) -> [MenuBarNeedsYouSection.Row] {
 }
 
 #Preview("install banner - light") {
-    MenuBarView(MenuBarViewModelMock.installNeeded).preferredColorScheme(.light)
+    MenuBarView(MenuBarViewModelMock.runtimeFailed).preferredColorScheme(.light)
 }
 
 #Preview("install banner - dark") {
-    MenuBarView(MenuBarViewModelMock.installNeeded).preferredColorScheme(.dark)
+    MenuBarView(MenuBarViewModelMock.runtimeFailed).preferredColorScheme(.dark)
 }
 
 /// The popover content as the production scene hosts it: on a native material, not a fabricated
