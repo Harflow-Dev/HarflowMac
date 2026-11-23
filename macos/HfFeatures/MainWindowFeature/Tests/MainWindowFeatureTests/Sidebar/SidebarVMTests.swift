@@ -87,6 +87,7 @@ import Testing
         given(routing).selectionPublisher().willReturn(selectionSubject.eraseToAnyPublisher())
         given(routing).select(.any).willProduce { onSelect?($0) }
         given(routing).openNewSession().willReturn()
+        given(routing).retryLoadingWork().willReturn()
         given(routing).pendingReveal.willProduce { pendingRevealBox.value }
         given(routing).revealPublisher().willReturn(revealSubject.eraseToAnyPublisher())
         given(routing).consumeReveal(requestID: .any).willReturn()
@@ -182,8 +183,8 @@ import Testing
         #expect(sut.emptyStateMessage == "No tasks yet. Tasks started through harflow appear here.")
     }
     
-    @Test func givenAPlainListError_whenListed_thenTheEmptyStateDoesNotShowAndTheMessageForwards() async {
-        // given — a plain list error takes the red-text path.
+    @Test func givenAPlainListError_whenListed_thenTheEmptyStateDoesNotShowAndTheRefreshNoteReplacesTheMessage() async {
+        // given — a plain list error on a listed sidebar takes the refresh note path.
         let harness = makeSUT()
         let sut = harness.sut
         let tasksSubject = harness.tasksSubject
@@ -199,15 +200,15 @@ import Testing
         tasksSubject.send([])
 
         // then
-        await waitUntil { sut.listErrorMessage != nil }
+        await waitUntil { sut.showsRefreshNote }
         #expect(sut.emptyStateMessage == nil)
-        #expect(sut.listErrorMessage == error.message)
+        #expect(sut.listErrorMessage == nil)
         #expect(sut.isConnected == false)
     }
 
-    // A `notFound` error for `harflow-ctl` keeps the plain `listErrorMessage`, and the error still
+    // A `notFound` error for `harflow-ctl` on a listed sidebar shows the refresh note, and the error still
     // outranks the empty state.
-    @Test func givenANotFoundListError_whenListed_thenThePlainErrorTextIsKept() async {
+    @Test func givenANotFoundListError_whenListed_thenTheRefreshNoteShows() async {
         // given
         let harness = makeSUT()
         let sut = harness.sut
@@ -224,10 +225,10 @@ import Testing
         tasksSubject.send([])
 
         // then
-        await waitUntil { sut.listErrorMessage != nil }
+        await waitUntil { sut.showsRefreshNote }
         #expect(sut.emptyStateMessage == nil)
         #expect(sut.isConnected == false)
-        #expect(sut.listErrorMessage == error.message)
+        #expect(sut.listErrorMessage == nil)
     }
 
     // MARK: - Loading skeleton (Monitor piece 11, Plan review round 1 item 4)

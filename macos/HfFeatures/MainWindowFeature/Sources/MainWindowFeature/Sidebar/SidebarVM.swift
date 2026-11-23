@@ -260,6 +260,17 @@ final class SidebarVM: SidebarViewModel {
     /// Written on change only: the task store gate is up, so creation is blocked while the populated sidebar stays.
     private(set) var storeBlocksCreation = false
     var creationIsAvailable: Bool { !showsSetupGate && !storeBlocksCreation }
+    @ObservationIgnored private var renderedShowsRefreshNote = false
+    var showsRefreshNote: Bool {
+        get { access(keyPath: \.showsRefreshNote); return renderedShowsRefreshNote }
+        set {
+            guard renderedShowsRefreshNote != newValue else { return }
+            withMutation(keyPath: \.showsRefreshNote) { renderedShowsRefreshNote = newValue }
+            presentationWrites += 1
+        }
+    }
+
+    @ObservationIgnored var announce: @MainActor (String) -> Void = SidebarRefreshNote.announce
 
     /// Tasks the person has collapsed in the sidebar's tree — expanded by default (Design point 3).
     /// Lives for the app's lifetime (this VM is cached across window close/reopen); never mutated by
@@ -392,11 +403,6 @@ final class SidebarVM: SidebarViewModel {
     func refreshSetupGate() {
         let next = !runtimeSetupState.isReady || MainWindowGate.owns(latestListError)
         if showsSetupGate != next { showsSetupGate = next }
-    }
-
-    func didTapRuntimeSetup() {
-        guard runtimeSetupState.actionTitle != nil, let setup = useCase as? any RuntimeSetupObserving else { return }
-        Task { await setup.installRuntime() }
     }
 
     private static func isCreation(_ destination: MonitorDestination?) -> Bool {

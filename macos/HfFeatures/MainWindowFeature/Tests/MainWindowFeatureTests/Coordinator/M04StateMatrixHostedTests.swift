@@ -20,6 +20,7 @@ struct M04StateMatrixHostedTests {
         "composer-unqualified", "composer-invalid", "composer-starting", "composer-refused",
         "composer-unknown", "advanced", "advanced-closed", "history-empty", "history-loading",
         "history-older", "history-error", "history-reconnecting", "history-retained",
+        "engine-call-failed", "engine-call-timed-out",
         "runtime-checking", "runtime-install-required", "runtime-update-required",
         "runtime-installing", "runtime-failed", "runtime-listing"
     ]
@@ -250,6 +251,11 @@ struct M04StateMatrixHostedTests {
             fixture.landmarks.append("Loading tasks…")
         case "history-older", "history-error", "history-reconnecting", "history-retained":
             configureHistory(state, fixture: &fixture)
+        case "engine-call-failed", "engine-call-timed-out":
+            // The drawn note above the lists; the dot's help text names the failed command and is not a landmark here.
+            coordinator.sidebarViewModel.isConnected = false
+            coordinator.sidebarViewModel.showsRefreshNote = true
+            fixture.landmarks += [SidebarRefreshNote.title, SidebarRefreshNote.retryTitle]
         default: break
         }
         configureRuntime(state, fixture: &fixture)

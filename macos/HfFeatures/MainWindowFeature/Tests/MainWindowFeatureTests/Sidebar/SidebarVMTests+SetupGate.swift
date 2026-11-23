@@ -65,7 +65,7 @@ extension SidebarVMTests {
         #expect(sut.listErrorMessage == nil)
     }
 
-    @Test func givenAnotherListingFailure_whenListed_thenNoSetupGateShowsAndTheLineKeepsItsMessage() async {
+    @Test func givenAnotherListingFailure_whenNothingIsListedYet_thenNoSetupGateShowsAndTheLineKeepsItsMessage() async {
         // given
         let harness = makeSUT()
         let sut = harness.sut
@@ -118,6 +118,7 @@ extension SidebarVMTests {
         given(useCase).listError.willReturn(givenContractError())
         stubAppearance(useCase)
         given(routing).selection.willReturn(nil)
+        given(routing).retryLoadingWork().willReturn()
         // when
         let sut = SidebarVM(useCase: useCase, routing: routing, visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
         // then

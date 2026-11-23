@@ -11,6 +11,8 @@ struct SidebarListPresentation: Equatable, Sendable {
     var workflowTitles: [String]
     var workflowsExpanded: Bool
     var listError: String?
+    /// The "Couldn't refresh your work" note after the navigation rows (unified role only).
+    var refreshFailed = false
     var skeleton: Bool
     var taskHistory: HistoryLoadingState
     var workflowHistory: HistoryLoadingState
@@ -39,6 +41,7 @@ struct SidebarListEntry: Identifiable, Equatable, Sendable {
         case heading(String)
         case item(SidebarItem)
         case error(String)
+        case refreshFailed
         case skeleton
         case history(String, HistoryLoadingState)
         case empty(String)

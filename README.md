@@ -54,7 +54,7 @@ Saved workflows offer Delete… in More workflow actions. Cancel is the default;
 
 Retained workflow read failures appear as a counted entry above the sidebar appearance and Settings controls. Open it to read each failure and retry; the entry disappears when all sources recover. The top incident notification remains dismissible.
 
-The title bar shows Harflow's engine connection status. Choose Light, Dark, or System from the sidebar footer icons to set the appearance across Harflow. System follows this Mac's appearance setting.
+The title bar shows Harflow's engine connection status; when refreshing work fails after work has been listed, the dot turns red with the failure as its help text and a "Couldn't refresh your work" note with Retry appears above the lists while the last known rows stay. Choose Light, Dark, or System from the sidebar footer icons to set the appearance across Harflow. System follows this Mac's appearance setting.
 
 After an install or update, its success notice appears in the menu bar popover. The notice ends when the app quits, and reopening with an up-to-date engine does not show it again. Runtime readiness and Settings setup controls remain available.
 

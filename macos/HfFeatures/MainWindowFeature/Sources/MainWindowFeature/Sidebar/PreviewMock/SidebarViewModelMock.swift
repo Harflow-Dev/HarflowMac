@@ -47,6 +47,10 @@ final class SidebarViewModelMock: SidebarViewModel {
     /// Preview and test input: the task store gate blocks creation although the sidebar body shows.
     var forcesCreationBlocked = false
     var creationIsAvailable: Bool { !showsSetupGate && !forcesCreationBlocked }
+    /// Preview and test input: the refresh note leads the list.
+    var showsRefreshNote = false
+    var refreshRetryTapCount = 0
+    func didTapRetryRefresh() { refreshRetryTapCount += 1 }
     var runtimeSetupTapCount = 0
     var newSessionTapCount = 0
     var loadOlderTasksTapCount = 0

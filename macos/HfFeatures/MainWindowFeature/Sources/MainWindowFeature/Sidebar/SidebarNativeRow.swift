@@ -11,6 +11,7 @@ import SwiftUI
     var toggle: (String) -> Void = { _ in }
     var toggleWorkflows: () -> Void = {}
     var newWorkflow: () -> Void = {}
+    var retryRefresh: () -> Void = {}
     var loadTasks: () -> Void = {}
     var loadWorkflows: () -> Void = {}
     var move: (MoveCommandDirection) -> Void = { _ in }
@@ -23,7 +24,7 @@ import SwiftUI
     }
 
     func reset() {
-        select = { _ in }; toggle = { _ in }; toggleWorkflows = {}; newWorkflow = {}
+        select = { _ in }; toggle = { _ in }; toggleWorkflows = {}; newWorkflow = {}; retryRefresh = {}
         loadTasks = {}; loadWorkflows = {}
         move = { _ in }; mounted = { _ in }; history = { _, _ in }
         viewEvent = .constant(.none)
@@ -159,6 +160,8 @@ struct SidebarNativeRow: View {
             }
         case .error(let message):
             Text(message).font(.hf(.secondary)).foregroundStyle(Color.failedRed).textSelection(.enabled)
+        case .refreshFailed:
+            SidebarRefreshNoteRow(retry: { actions.retryRefresh() })
         case .skeleton:
             SkeletonRows()
         case .history(let source, let state):

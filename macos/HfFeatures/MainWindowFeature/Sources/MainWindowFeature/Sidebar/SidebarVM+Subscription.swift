@@ -34,10 +34,7 @@ extension SidebarVM {
             .sink { [weak self] error in
                 guard let self else { return }
                 latestListError = error
-                // A contract or capability gate owns its error, as the managed-runtime and store gates do.
-                let dedicatedError = error?.isManagedRuntimeUnavailable == true || error?.isStateRecoveryRefusal == true
-                    || MainWindowGate.owns(error)
-                listErrorMessage = dedicatedError ? nil : error?.message
+                refreshListErrorPresentation()
                 refreshSetupGate()
                 // Refresh both immediately: `recompute()` returns early while presentation is off.
                 emptyStateMessage = computeEmptyStateMessage()
@@ -54,6 +51,7 @@ extension SidebarVM {
             .sink { [weak self] hasListed in
                 guard let self else { return }
                 latestHasListed = hasListed
+                refreshListErrorPresentation()
                 recompute()
             }
             .store(in: &cancellables)
@@ -84,6 +82,25 @@ extension SidebarVM {
             .store(in: &cancellables)
     }
     
+    func didTapRuntimeSetup() {
+        guard runtimeSetupState.actionTitle != nil, let setup = useCase as? any RuntimeSetupObserving else { return }
+        Task { await setup.installRuntime() }
+    }
+
+    func didTapRetryRefresh() { routing.retryLoadingWork() }
+
+    /// The listing error as the sidebar shows it. A gate, the managed-runtime banner or the store link owns its own errors;
+    /// after the first listing any other error becomes the refresh note, whose full text lives in the title bar dot, so
+    /// the list prints the raw message only before the first listing. Both are written on change only.
+    func refreshListErrorPresentation() {
+        let note = SidebarRefreshNote.shows(hasListed: latestHasListed, listError: latestListError)
+        // One announcement per false-to-true transition; the row itself has no side effects.
+        if note, !showsRefreshNote { announce(SidebarRefreshNote.title) }
+        showsRefreshNote = note
+        let owned = SidebarRefreshNote.isOwnedElsewhere(latestListError)
+        listErrorMessage = owned || note ? nil : latestListError?.message
+    }
+
     /// Split out of `subscribeIfNeeded()` to keep that function within the lint length budget.
     private func subscribeToRuntimeAndRecovery() {
         if let recovery = useCase as? any SidebarStoreRecoveryObserving {

@@ -187,6 +187,9 @@ enum SidebarListReconciler {
             entries += SidebarNavigationEntry.unifiedEntries(badge: input.needsYouBadge, creationAvailable: input.creationAvailable).map {
                 .init(id: $0.id, content: .navigation($0), minimumHeight: input.minimumRowHeight)
             }
+            if input.refreshFailed {
+                entries.append(.init(id: "diagnostic:refresh-failed", content: .refreshFailed))
+            }
             if input.skeleton {
                 entries.append(.init(id: "diagnostic:skeleton", content: .skeleton))
             } else {

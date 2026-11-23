@@ -55,6 +55,23 @@ import Testing
         #expect(sut.helpText == error.message)
     }
 
+    @Test func givenAConnectedStatus_whenTheListingTimesOut_thenTheHelpTextIsTheTimeoutMessage() async {
+        // given
+        let harness = makeHarness(connectionLine: "connected · harflow-ctl")
+        let sut = ConnectionStatusVM(useCase: harness.useCase)
+        sut.didAppear()
+        harness.hasListed.send(true)
+        harness.listError.send(nil)
+        await waitUntil { sut.isConnected }
+
+        // when
+        harness.listError.send(.timedOut(tool: "harflow-ctl task-list-page", seconds: 30))
+
+        // then
+        await waitUntil { !sut.isConnected }
+        #expect(sut.helpText == "harflow-ctl task-list-page did not answer within 30 s.")
+    }
+
     @Test func givenAnErrorStatus_whenTheErrorClears_thenItReconnectsWithoutReappearing() async {
         // given
         let harness = makeHarness(connectionLine: "connecting…")

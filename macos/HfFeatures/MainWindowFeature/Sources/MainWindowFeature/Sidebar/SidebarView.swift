@@ -32,6 +32,10 @@ protocol SidebarViewModel: ViewModel {
     /// Whether New task and the workflow creation and library rows act: false under the setup line and under the task
     /// store gate, which keeps the populated sidebar. A requirement, for the same reason as `showsSetupGate`.
     var creationIsAvailable: Bool { get }
+    /// Whether the list leads with the "Couldn't refresh your work" note: a listed sidebar whose refresh failed. A
+    /// requirement, for the same reason as `showsSetupGate`.
+    var showsRefreshNote: Bool { get }
+    func didTapRetryRefresh()
     func didTapRuntimeSetup()
     var sections: [SidebarSection] { get }
     var taskHistoryState: HistoryLoadingState { get }
@@ -85,6 +89,8 @@ extension SidebarViewModel {
     var runtimeSetupState: RuntimeSetupState { .ready }
     var showsSetupGate: Bool { !runtimeSetupState.isReady }
     var creationIsAvailable: Bool { !showsSetupGate }
+    var showsRefreshNote: Bool { false }
+    func didTapRetryRefresh() {}
     func didTapRuntimeSetup() {}
     var appAppearance: AppAppearance { .system }
     func didSelectAppearance(_: AppAppearance) {}
@@ -236,6 +242,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 workflowTitles: viewModel.savedWorkflows.map(\.id),
                 workflowsExpanded: false,
                 listError: viewModel.listErrorMessage,
+                refreshFailed: viewModel.showsRefreshNote,
                 skeleton: viewModel.showsLoadingSkeleton,
                 taskHistory: viewModel.taskHistoryState,
                 workflowHistory: viewModel.workflowHistoryState,
@@ -263,6 +270,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
                 }
                 actions.toggle = toggleExpansion
                 actions.newWorkflow = viewModel.didTapNewWorkflow
+                actions.retryRefresh = viewModel.didTapRetryRefresh
                 actions.loadTasks = viewModel.didTapLoadMoreTasks
                 actions.loadWorkflows = viewModel.didTapLoadMoreWorkflows
                 actions.move = { direction in

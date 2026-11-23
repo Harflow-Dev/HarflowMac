@@ -82,6 +82,8 @@ protocol SidebarRouting: Sendable {
     /// `nil` clears native selection and every alias highlight for the logical destination.
     func select(_ destination: MonitorDestination?)
     func openNewSession()
+    /// Asks for another work listing, as the first-listing gate's Retry does.
+    func retryLoadingWork()
 
     // MARK: Pending reveal (settled plan, Design point 5)
 
