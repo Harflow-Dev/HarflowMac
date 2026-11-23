@@ -212,7 +212,7 @@ final class QualificationPresentation {
         case .failed(let failure):
             switch failure {
             case .tool(.unsupportedCommand):
-                (.unsupported, "Harness qualification is unavailable in the selected engine. A supporting managed runtime is required.")
+                (.unsupported, "Harness qualification is unavailable in this Harflow runtime. A supporting managed runtime is required.")
             case .runtimeChanged, .evidenceChanged: (.binaryChanged, failure.displayMessage)
             case .missingIdentity: (.unavailable, failure.displayMessage)
             default: (.failed, failure.displayMessage)

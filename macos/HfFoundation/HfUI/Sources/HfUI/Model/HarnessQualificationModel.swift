@@ -18,7 +18,7 @@ public struct HarnessQualificationModel: Equatable, Sendable {
         case failedAtRuntime
         /// The harness or evidence is unavailable.
         case unavailable
-        /// The engine or feature does not support qualification.
+        /// The runtime or feature does not support qualification.
         case unsupported
         /// The UI stopped adopting this attempt; engine completion is unknown.
         case cancelled
@@ -34,7 +34,7 @@ public struct HarnessQualificationModel: Equatable, Sendable {
             case .failed: "Failed"
             case .failedAtRuntime: "Failed at runtime"
             case .unavailable: "Harness unavailable"
-            case .unsupported: "Unsupported engine"
+            case .unsupported: "Unsupported runtime"
             case .cancelled: "Cancelled"
             case .binaryChanged: "Binary changed"
             }

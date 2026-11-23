@@ -105,4 +105,19 @@ struct QualificationPresentationTests {
             controller.stop()
         }
     }
+
+    @Test func givenUnsupportedRuntime_whenDiscovered_thenTheRuntimeWordingIsShownWithoutAnAction() async {
+        // given
+        let fixture = QualificationFixture(error: .unsupportedCommand(tool: "harflow-ctl", command: "qualification", detail: "fixture"))
+        let controller = QualificationPresentation(session: QualificationSession(repository: fixture))
+        // when
+        _ = await controller.discover(.task(options: ["--backend=fixture"]))
+        // then
+        #expect(controller.cards.first?.model.state == .unsupported)
+        #expect(controller.cards.first?.model.state.title == "Unsupported runtime")
+        #expect(controller.cards.first?.model.message
+            == "Harness qualification is unavailable in this Harflow runtime. A supporting managed runtime is required.")
+        #expect(controller.cards.first?.model.actionTitle == nil)
+        controller.stop()
+    }
 }

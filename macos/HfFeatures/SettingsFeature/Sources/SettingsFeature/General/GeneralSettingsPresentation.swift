@@ -38,19 +38,27 @@ enum RowGlyph: Equatable {
     case done
     case failed
     case attention
+    /// A cancelled qualification check: the shared stop glyph.
+    case cancelled
+    /// A harness that was not found: the cross in the cancelled colour.
+    case unavailable
 
-    /// The shared task status whose glyph this one reuses; nil for attention, which has its own alert glyph.
+    /// The shared task status whose glyph this one reuses; nil for the glyphs drawn here (attention, unavailable).
     var status: TaskStatus? {
         switch self {
         case .busy: .running
         case .done: .completed
         case .failed: .failed
-        case .attention: nil
+        case .cancelled: .cancelled
+        case .attention, .unavailable: nil
         }
     }
 
     /// The SF Symbol drawn for attention.
     var attentionSymbol: String? { self == .attention ? "exclamationmark.circle" : nil }
+
+    /// The SF Symbol drawn for a harness that was not found, in the neutral colour.
+    var unavailableSymbol: String? { self == .unavailable ? "xmark" : nil }
 
     /// The spoken label.
     var accessibilityLabel: String {
@@ -59,6 +67,8 @@ enum RowGlyph: Equatable {
         case .done: "Done"
         case .failed: "Failed"
         case .attention: "Needs attention"
+        case .cancelled: "Cancelled"
+        case .unavailable: "Not found"
         }
     }
 }

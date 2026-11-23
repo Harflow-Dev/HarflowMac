@@ -14,6 +14,8 @@ import SwiftUI
 @MainActor
 protocol HarnessesViewModel: ViewModel {
     var qualificationCards: [QualificationCard] { get }
+    /// One-line rows for the harnesses that have no native qualification, after the cards.
+    var qualificationNotes: [QualificationNote] { get }
     func didTapQualification(_ id: String)
     
     var rows: [HarnessRow] { get }
@@ -103,7 +105,10 @@ struct HarnessesView<VM: HarnessesViewModel>: View {
                     }
                     Section("Harness qualification") {
                         ForEach(viewModel.qualificationCards) { card in
-                            HarnessQualificationCard(model: card.model) { viewModel.didTapQualification(card.id) }
+                            QualificationCardRow(card: card) { viewModel.didTapQualification(card.id) }
+                        }
+                        ForEach(viewModel.qualificationNotes) { note in
+                            QualificationNoteRow(note: note)
                         }
                     }
                 }
@@ -147,6 +152,40 @@ extension HarnessesView {
                     .foregroundStyle(Color.secondaryText)
             }
         }
+    }
+}
+
+// MARK: - QualificationCardRow
+
+/// A qualification card with its state glyph before it; Qualifying and Not checked draw none.
+private struct QualificationCardRow: View {
+    let card: QualificationCard
+    let action: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: HfRadius.Metrics.spacing8) {
+            if let glyph = QualificationGlyph.for(card.model.state) { RowGlyphView(glyph: glyph).accessibilityHidden(true) }
+            HarnessQualificationCard(model: card.model, action: action)
+        }
+    }
+}
+
+// MARK: - QualificationNoteRow
+
+/// A harness without a qualification card: its name and one line, with the not-found glyph when it is not installed.
+private struct QualificationNoteRow: View {
+    let note: QualificationNote
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: HfRadius.Metrics.spacing16) {
+            Text(note.identity).font(.hf(.body))
+            Spacer(minLength: 0)
+            HStack(spacing: HfRadius.Metrics.spacing4) {
+                if let glyph = note.glyph { RowGlyphView(glyph: glyph).accessibilityHidden(true) }
+                Text(note.text).font(.hf(.secondary)).foregroundStyle(Color.secondaryText)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -217,5 +256,6 @@ private struct HarnessBlock<Content: View>: View {
 
 extension HarnessesViewModel {
     var qualificationCards: [QualificationCard] { [] }
+    var qualificationNotes: [QualificationNote] { [] }
     func didTapQualification(_: String) {}
 }

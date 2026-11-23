@@ -57,8 +57,8 @@ public struct HarnessQualificationCard: View {
                         .disabled(!model.canCheck)
                         .font(.hf(.secondary))
                 }
-                if model.state == .checking || model.state == .cancelled {
-                    Text("Cancelling stops waiting for this check. The engine may still finish it.")
+                if model.state == .checking {
+                    Text("Cancelling stops waiting for this check. The runtime may still finish it.")
                         .font(.hf(.caption))
 .foregroundStyle(Color.secondaryText)
                 }

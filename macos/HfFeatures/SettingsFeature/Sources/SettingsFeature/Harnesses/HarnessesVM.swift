@@ -23,7 +23,8 @@ import MonitorCore
 @MainActor
 protocol HarnessesUseCase: Sendable {
     func qualificationSession() -> QualificationSession
-    func qualificationBackends() async throws -> [String]
+    /// The engine catalog's harnesses in catalog order; throws when discovery is unavailable.
+    func qualificationBackends() async throws -> [QualificationBackend]
     func status() async -> Result<SetupDocument, ToolError>
     func perform(_ action: SetupClient.Action, client: String?, using setupClient: SetupClient) async -> Result<SetupDocument, ToolError>
     /// Locates `harflow-setup` only, mirroring the original's `model.setup()` pre-check in `run`
@@ -60,6 +61,9 @@ final class HarnessesVM: HarnessesViewModel {
     // MARK: - HarnessesViewModel Properties
     
     private var qualifications: [String: QualificationPresentation] = [:]
+    /// The native harnesses of the catalog, in catalog order.
+    private var nativeOrder: [String] = []
+    private(set) var qualificationNotes: [QualificationNote] = []
     @ObservationIgnored private var qualificationTask: Task<Void, Never>?
     @ObservationIgnored private var qualificationGeneration = UUID()
     private var qualificationFailure: String?
@@ -68,7 +72,7 @@ final class HarnessesVM: HarnessesViewModel {
             return [.init(id: "discovery", model: .init(identity: "Harness discovery", state: .failed,
                                                         message: qualificationFailure, features: []))]
         }
-        return qualifications.keys.sorted().flatMap { backend in
+        return nativeOrder.flatMap { backend in
             (qualifications[backend]?.cards ?? []).map { card in
                 QualificationCard(id: backend + ":" + card.id, model: card.model, owner: backend)
             }
@@ -85,19 +89,22 @@ final class HarnessesVM: HarnessesViewModel {
     private func loadQualifications() {
         qualificationTask?.cancel()
         qualifications.values.forEach { $0.stop() }
-        qualifications = [:]
-        qualificationFailure = nil
+        resetQualifications()
         let generation = UUID()
         qualificationGeneration = generation
         qualificationTask = Task { [weak self, useCase] in
-            let backends: [String]
+            let backends: [QualificationBackend]
             do { backends = try await useCase.qualificationBackends() } catch {
                 guard let self, !Task.isCancelled, generation == qualificationGeneration else { return }
                 qualificationFailure = String(((error as? ToolError)?.message ?? String(describing: error)).prefix(1000))
                 return
             }
             guard let self, !Task.isCancelled, generation == qualificationGeneration else { return }
-            for backend in backends {
+            // Only the native three are discovered or checked; every other harness gets a plain note.
+            let native = backends.map(\.backend).filter(NativeQualification.isNative)
+            nativeOrder = native
+            qualificationNotes = backends.filter { !NativeQualification.isNative($0.backend) }.map(QualificationNote.make(for:))
+            for backend in native {
                 let controller = QualificationPresentation(session: useCase.qualificationSession())
                 qualifications[backend] = controller
                 _ = await controller.discover(.harness(backend: backend))
@@ -236,13 +243,20 @@ final class HarnessesVM: HarnessesViewModel {
             qualificationGeneration = UUID()
             qualificationTask?.cancel()
             qualifications.values.forEach { $0.stop() }
-            qualifications = [:]
-            qualificationFailure = nil
+            resetQualifications()
             resetLoaded()
             isLoading = false
             if workingKey != nil { workingKey = nil }
         }
         return true
+    }
+
+    /// Drops every qualification card and note, writing only what changes.
+    private func resetQualifications() {
+        if !qualifications.isEmpty { qualifications = [:] }
+        if !nativeOrder.isEmpty { nativeOrder = [] }
+        if !qualificationNotes.isEmpty { qualificationNotes = [] }
+        if qualificationFailure != nil { qualificationFailure = nil }
     }
 
     private func resetLoaded() {
@@ -307,5 +321,5 @@ final class HarnessesVM: HarnessesViewModel {
 
 extension HarnessesUseCase {
     func qualificationSession() -> QualificationSession { QualificationSession(repository: NullQualificationRepository()) }
-    func qualificationBackends() async throws -> [String] { [] }
+    func qualificationBackends() async throws -> [QualificationBackend] { [] }
 }

@@ -18,6 +18,11 @@ final class HarnessesViewModelMock: HarnessesViewModel {
         identity: "Fixture harness · fixture version", state: .ready, message: "Fixture required features are ready.",
         features: [.init(id: "fixture_feature", result: "Ready · seeded")]))]
 
+    var qualificationNotes: [QualificationNote] = [
+        .make(for: QualificationBackend(backend: "opencode", installed: true)),
+        .make(for: QualificationBackend(backend: "antigravity", installed: false))
+    ]
+
     var rows: [HarnessRow]
     var serverPath: String?
     var loadFailure: HarnessLoadFailure?

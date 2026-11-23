@@ -8,6 +8,11 @@ struct HarnessQualificationModelTests {
         #expect(HarnessQualificationModel.State.unsupported.actionTitle == nil)
     }
 
+    @Test func givenUnsupported_whenTitled_thenUnsupportedRuntime() {
+        // given / when / then
+        #expect(HarnessQualificationModel.State.unsupported.title == "Unsupported runtime")
+    }
+
     @Test func givenCancelledOrFailed_whenPresenting_thenRetryIsExplicit() {
         // given / when / then
         for state in [HarnessQualificationModel.State.cancelled, .failed, .failedAtRuntime] {

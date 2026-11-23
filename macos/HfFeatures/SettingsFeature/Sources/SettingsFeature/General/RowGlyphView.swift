@@ -3,8 +3,8 @@ import SwiftUI
 
 // MARK: - RowGlyphView
 
-/// The glyph at the start of a Settings status row: the shared spinner, check and cross, or an alert circle in
-/// the warning colour for attention (not the Needs-you hand).
+/// The glyph at the start of a Settings status row: the shared spinner, check, cross and stop, a neutral cross for
+/// a harness that was not found, or an alert circle in the warning colour for attention (not the Needs-you hand).
 struct RowGlyphView: View {
     let glyph: RowGlyph
 
@@ -16,6 +16,12 @@ struct RowGlyphView: View {
             Image(systemName: symbol)
                 .font(.hf(.body))
                 .foregroundStyle(Color.warningFG)
+                .frame(width: HfRadius.Metrics.statusIconSize, height: HfRadius.Metrics.statusIconSize)
+                .accessibilityLabel(glyph.accessibilityLabel)
+        } else if let symbol = glyph.unavailableSymbol {
+            Image(systemName: symbol)
+                .font(.hf(.body))
+                .foregroundStyle(Color.cancelledGray)
                 .frame(width: HfRadius.Metrics.statusIconSize, height: HfRadius.Metrics.statusIconSize)
                 .accessibilityLabel(glyph.accessibilityLabel)
         }
