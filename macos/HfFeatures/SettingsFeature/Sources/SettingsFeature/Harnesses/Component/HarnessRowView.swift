@@ -47,6 +47,9 @@ struct HarnessRowView: View {
     let onInstall: () -> Void
     let onRemove: () -> Void
     var onAllowlist: () -> Void = {}
+    /// The row's last failed action; replaces the row's actions with Retry.
+    var failure: HarnessRowFailure?
+    var onRetry: () -> Void = {}
     
     var body: some View {
         HStack(alignment: .top) {
@@ -56,6 +59,14 @@ struct HarnessRowView: View {
                     Text(row.stateLabel).font(.hf(.secondary)).foregroundStyle(stateColor)
                     if let action = row.action { Chip(text: "last: \(action)") }
                 }
+                if let failure {
+                    Text(failure.message)
+                        .font(.hf(.secondary))
+                        .foregroundStyle(Color.failedRed)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let code = failure.code { DetailLine(label: "Code", value: code) }
+                }
                 if let rowError = row.error { Text(rowError).font(.hf(.secondary)).foregroundStyle(Color.failedRed) }
                 ForEach(Array(row.notes.enumerated()), id: \.offset) { _, note in
                     Text(note).font(.hf(.secondary)).foregroundStyle(Color.secondaryText).fixedSize(horizontal: false, vertical: true)
@@ -63,11 +74,15 @@ struct HarnessRowView: View {
             }
             Spacer()
             if isWorking { ProgressView().controlSize(.small) }
-            Button("MCP approvals", action: onAllowlist).disabled(isAnyWorking)
-            Button(HarnessRowActions.installTitle(row: row), action: onInstall)
-                .disabled(HarnessRowActions.isInstallDisabled(row: row, isAnyWorking: isAnyWorking))
-            Button("Remove", action: onRemove)
-                .disabled(HarnessRowActions.isRemoveDisabled(row: row, isAnyWorking: isAnyWorking))
+            if failure != nil {
+                Button("Retry", action: onRetry).disabled(isAnyWorking)
+            } else {
+                Button("MCP approvals", action: onAllowlist).disabled(isAnyWorking)
+                Button(HarnessRowActions.installTitle(row: row), action: onInstall)
+                    .disabled(HarnessRowActions.isInstallDisabled(row: row, isAnyWorking: isAnyWorking))
+                Button("Remove", action: onRemove)
+                    .disabled(HarnessRowActions.isRemoveDisabled(row: row, isAnyWorking: isAnyWorking))
+            }
         }
         .padding(.vertical, HfRadius.Metrics.spacing4)
     }
@@ -81,15 +96,19 @@ struct HarnessRowView: View {
 #if DEBUG
 private struct HarnessRowPreview: View {
     let row: HarnessRow
+    var failure: HarnessRowFailure?
 
-    init(_ row: HarnessRow) { self.row = row }
+    init(_ row: HarnessRow, failure: HarnessRowFailure? = nil) {
+        self.row = row
+        self.failure = failure
+    }
 
     var body: some View {
         // `HarnessRow` has no public initializer (MonitorCore builds it internally from JSON), so
         // the preview goes through the same public `SetupDocument.decode` entry point the app
         // uses — the same pattern `HfRepositoryTests` already established for this type.
         List {
-            HarnessRowView(row: row, isWorking: false, isAnyWorking: false, onInstall: {}, onRemove: {})
+            HarnessRowView(row: row, isWorking: false, isAnyWorking: false, onInstall: {}, onRemove: {}, failure: failure)
         }
         .frame(width: HfRadius.Metrics.toolbarPreviewHeight, height: HfRadius.Metrics.sidebarSearchMinimumWidth)
     }
@@ -111,6 +130,20 @@ private struct HarnessRowPreview: View {
 
 #Preview("HarnessRow, registered - dark") {
     if let row = HarnessRowPreview.sampleRow(installed: true) { HarnessRowPreview(row).preferredColorScheme(.dark) }
+}
+
+#Preview("HarnessRow, failed - light") {
+    if let row = HarnessRowPreview.sampleRow(installed: true) {
+        HarnessRowPreview(row, failure: .init(message: "Could not update the Codex configuration: permission denied", code: "setup_error", action: .install))
+            .preferredColorScheme(.light)
+    }
+}
+
+#Preview("HarnessRow, failed - dark") {
+    if let row = HarnessRowPreview.sampleRow(installed: true) {
+        HarnessRowPreview(row, failure: .init(message: "Could not update the Codex configuration: permission denied", code: "setup_error", action: .install))
+            .preferredColorScheme(.dark)
+    }
 }
 
 #Preview("HarnessRow, not installed - light") {

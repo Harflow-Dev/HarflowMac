@@ -34,4 +34,29 @@ import Testing
         #expect(error.refusalMessage == nil)
         #expect(error.displayMessage == "harflow-ctl did not answer within 8 s.")
     }
+
+    @Test func givenRefusalWithReason_whenDetailCode_thenNil() {
+        // given
+        let error = ToolError.structuredRefusal(code: "state_incompatible", message: "Unsupported state root.", data: ["reason": .string("foreign_store")])
+
+        // when / then
+        #expect(error.stateRecoveryReason != nil)
+        #expect(error.detailCode == nil)
+    }
+
+    @Test func givenRefusalWithoutReason_whenDetailCode_thenCode() {
+        // given
+        let error = ToolError.refused(code: "incompatible_runtime", message: "Incompatible Harflow runtime")
+
+        // when / then
+        #expect(error.detailCode == "incompatible_runtime")
+    }
+
+    @Test func givenNonRefusal_whenDetailCode_thenNil() {
+        // given
+        let error = ToolError.timedOut(tool: "harflow-ctl", seconds: 8)
+
+        // when / then
+        #expect(error.detailCode == nil)
+    }
 }

@@ -60,13 +60,8 @@ final class HarnessesViewRepository: HarnessesUseCase, @unchecked Sendable {
         toolEnvironmentRepository.setup()
     }
 
-    // MARK: Install
+    // MARK: Runtime readiness
 
+    var runtimeSetupState: RuntimeSetupState { installRepository.setupState }
     func runtimeSetupPublisher() -> AnyPublisher<RuntimeSetupState, Never> { installRepository.setupStatePublisher() }
-    func installStatePublisher() -> AnyPublisher<InstallState, Never> { installRepository.statePublisher() }
-    var installState: InstallState { installRepository.state }
-    func lastCheckMessagePublisher() -> AnyPublisher<String?, Never> { installRepository.lastCheckMessagePublisher() }
-    var lastCheckMessage: String? { installRepository.lastCheckMessage }
-    func retry() async { await installRepository.retry() }
-    func reset() { installRepository.reset() }
 }

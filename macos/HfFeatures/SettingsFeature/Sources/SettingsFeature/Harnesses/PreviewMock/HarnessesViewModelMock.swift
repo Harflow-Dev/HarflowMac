@@ -20,26 +20,32 @@ final class HarnessesViewModelMock: HarnessesViewModel {
 
     var rows: [HarnessRow]
     var serverPath: String?
-    var errorMessage: String?
+    var loadFailure: HarnessLoadFailure?
+    var rowFailures: [String: HarnessRowFailure]
     var isLoading: Bool
     var workingKey: String?
-    var isRefreshDisabled: Bool { isLoading || workingKey != nil }
-    var installBannerModel: InstallBanner.Model?
+    var showsRuntimeSetup: Bool
+    var showsNoHarnesses: Bool
+    var isRefreshDisabled: Bool { showsRuntimeSetup || isLoading || workingKey != nil }
 
     init(
         rows: [HarnessRow] = HarnessesViewModelMock.sampleRows,
         serverPath: String? = "/usr/local/bin/harflow",
-        errorMessage: String? = nil,
+        loadFailure: HarnessLoadFailure? = nil,
+        rowFailures: [String: HarnessRowFailure] = [:],
         isLoading: Bool = false,
         workingKey: String? = nil,
-        installBannerModel: InstallBanner.Model? = nil
+        showsRuntimeSetup: Bool = false,
+        showsNoHarnesses: Bool = false
     ) {
         self.rows = rows
         self.serverPath = serverPath
-        self.errorMessage = errorMessage
+        self.loadFailure = loadFailure
+        self.rowFailures = rowFailures
         self.isLoading = isLoading
         self.workingKey = workingKey
-        self.installBannerModel = installBannerModel
+        self.showsRuntimeSetup = showsRuntimeSetup
+        self.showsNoHarnesses = showsNoHarnesses
     }
 
     func didAppear() {}
@@ -47,8 +53,13 @@ final class HarnessesViewModelMock: HarnessesViewModel {
     func didTapRefresh() {}
     func didTapInstall(_: HarnessRow) {}
     func didTapRemove(_: HarnessRow) {}
-    func didTapInstallBannerPrimary() {}
-    func didTapInstallBannerDismiss() {}
+    func didTapRetry(_: HarnessRow) {}
+    func didTapOpenSetup() {}
+
+    /// A failed update of the second sample row, as the registration-failed state draws it.
+    static var sampleRowFailures: [String: HarnessRowFailure] {
+        ["codex": HarnessRowFailure(message: "Could not update the Codex configuration: permission denied", code: "setup_error", action: .install)]
+    }
     
     /// `HarnessRow` has no public initializer — built through the same public
     /// `SetupDocument.decode` entry point the app uses.

@@ -24,6 +24,22 @@ import Testing
         #expect(captured?.pathId == MonitorDestination.openWindow.pathId)
     }
     
+    @Test func givenHarnessesRouting_whenOpenSetup_thenParentReceivesOpenWindow() {
+        // given
+        let parent = MockCoordinator()
+        var captured: [any PathDestination] = []
+        given(parent)
+            .handle(path: .any)
+            .willProduce { captured.append($0) }
+        let sut = SettingsCoordinator(parent: parent)
+
+        // when
+        sut.openSetup()
+
+        // then
+        #expect(captured.map(\.pathId) == [MonitorDestination.openWindow.pathId])
+    }
+
     @Test func givenTheCoordinator_whenBuildingEitherTab_thenAViewIsProduced() {
         // given
         let parent = MockCoordinator()

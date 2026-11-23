@@ -55,7 +55,7 @@ public final class SettingsCoordinator: SettingsNavigationCoordinator {
     
     public func buildHarnessesView() -> AnyView {
         let useCase = HarnessesViewRepository()
-        let vm = HarnessesVM(useCase: useCase)
+        let vm = HarnessesVM(useCase: useCase, routing: self)
         return HarnessesView(vm) { row in
             let allowlist = MCPAllowlistVM(backend: MCPAllowlistVM.backend(for: row.key), title: row.displayName, useCase: MCPAllowlistRepository())
             return MCPAllowlistView(viewModel: allowlist).eraseToAnyView()
@@ -74,5 +74,13 @@ public final class SettingsCoordinator: SettingsNavigationCoordinator {
 extension SettingsCoordinator: StoreRecoveryRouting {
     func revealBackup(_ receipt: StateRecoveryResult) {
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: receipt.backupPath)])
+    }
+}
+
+// MARK: - HarnessesRouting
+
+extension SettingsCoordinator: HarnessesRouting {
+    func openSetup() {
+        parent.handle(path: MonitorDestination.openWindow)
     }
 }

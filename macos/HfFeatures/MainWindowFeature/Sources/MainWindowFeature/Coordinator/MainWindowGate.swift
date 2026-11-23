@@ -89,6 +89,6 @@ public struct LoadingWorkError: Equatable, Sendable {
 
     nonisolated init(error: ToolError) {
         self.message = error.displayMessage
-        self.code = error.stateRecoveryReason == nil ? error.refusalCode : nil
+        self.code = error.detailCode
     }
 }

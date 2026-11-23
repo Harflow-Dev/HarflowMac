@@ -37,41 +37,34 @@ import Testing
         """#
     }
     
-    private static let setupClient = SetupClient(executable: "/bin/harflow-setup", environment: [:])
+    static let setupClient = SetupClient(executable: "/bin/harflow-setup", environment: [:])
     
     private func makeSUT(
         status: Result<SetupDocument, ToolError> = .success(HarnessesVMTests.document(HarnessesVMTests.emptyDocumentJSON)),
         locate: Result<SetupClient, ToolError> = .success(HarnessesVMTests.setupClient),
-        installState: InstallState = .idle
+        runtimeSetupState: RuntimeSetupState = .ready,
+        routing: (any HarnessesRouting)? = nil
     ) -> (sut: HarnessesVM, useCase: MockHarnessesUseCase) {
         let useCase = MockHarnessesUseCase()
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).qualificationBackends().willReturn([])
         given(useCase).status().willReturn(status)
         given(useCase).locate().willReturn(locate)
-        Self.stubInstall(useCase, installState: installState)
-        let sut = HarnessesVM(useCase: useCase)
+        Self.stubRuntime(useCase, runtimeSetupState: runtimeSetupState)
+        let sut = HarnessesVM(useCase: useCase, routing: routing)
         return (sut, useCase)
     }
 
-    /// Every `HarnessesVM` construction reads `installState` and `lastCheckMessage` in `init`, and `didAppear()` subscribes to their publishers —
-    /// so any test building its own `MockHarnessesUseCase` (bypassing `makeSUT`) needs these
-    /// defaults too, or Mockable fatals on the unstubbed member.
-    static func stubInstall(
+    /// Every `HarnessesVM` construction reads `runtimeSetupState` in `init`, and `didAppear()` reads it again and
+    /// subscribes to the publisher, so any test building its own `MockHarnessesUseCase` (bypassing `makeSUT`) needs
+    /// these defaults too, or Mockable fatals on the unstubbed member.
+    static func stubRuntime(
         _ useCase: MockHarnessesUseCase,
-        installState: InstallState = .idle,
-        installStatePublisher: AnyPublisher<InstallState, Never>? = nil,
-        runtimeSetupPublisher: AnyPublisher<RuntimeSetupState, Never>? = nil,
-        lastCheckMessagePublisher: AnyPublisher<String?, Never>? = nil,
-        onReset: @escaping () -> Void = {}
+        runtimeSetupState: RuntimeSetupState = .ready,
+        runtimeSetupPublisher: AnyPublisher<RuntimeSetupState, Never>? = nil
     ) {
-        given(useCase).runtimeSetupPublisher().willReturn(runtimeSetupPublisher ?? Just(.ready).eraseToAnyPublisher())
-        given(useCase).installState.willReturn(installState)
-        given(useCase).installStatePublisher().willReturn(installStatePublisher ?? Empty().eraseToAnyPublisher())
-        given(useCase).lastCheckMessage.willReturn(nil)
-        given(useCase).lastCheckMessagePublisher().willReturn(lastCheckMessagePublisher ?? Empty().eraseToAnyPublisher())
-        given(useCase).retry().willReturn()
-        given(useCase).reset().willProduce(onReset)
+        given(useCase).runtimeSetupState.willReturn(runtimeSetupState)
+        given(useCase).runtimeSetupPublisher().willReturn(runtimeSetupPublisher ?? Just(runtimeSetupState).eraseToAnyPublisher())
     }
     
     /// `publishViewEvent`/`publishDialog` (`HfCommon.ViewModel`) dispatch via `Task { @MainActor in
@@ -80,7 +73,7 @@ import Testing
     /// before reading it, and — per `waitUntil`'s own contract ("it times out silently, so always
     /// `#expect` the condition afterwards") — always asserts the awaited condition explicitly rather
     /// than trusting the wait alone.
-    private func waitForDialog(_ sut: HarnessesVM, publish: () -> Void) async -> (dialog: AlertContent, cancellable: AnyCancellable) {
+    func waitForDialog(_ sut: HarnessesVM, publish: () -> Void) async -> (dialog: AlertContent, cancellable: AnyCancellable) {
         var published: AlertContent?
         let cancellable = sut.objectDidPublishViewEvent.publisher.sink { event in
             if case .dialog(let dialog) = event { published = dialog }
@@ -103,10 +96,12 @@ import Testing
         await waitUntil { sut.rows.count == 2 }
         #expect(sut.rows.count == 2)
         #expect(sut.serverPath == "/usr/local/bin/harflow")
-        #expect(sut.errorMessage == nil)
+        #expect(sut.loadFailure == nil)
+        #expect(sut.showsNoHarnesses == false)
+        #expect(sut.showsRuntimeSetup == false)
     }
-    
-    @Test func givenAppear_whenStatusFailsWithARefusal_thenTheErrorMessageIsSet() async {
+
+    @Test func givenARefusedStatus_whenLoaded_thenMessageHasNoCodeAndCodeLineCarriesIt() async {
         // given
         let failure = ToolError.refused(code: "denied", message: "harflow-setup refused the request.")
         let (sut, _) = makeSUT(status: .failure(failure))
@@ -115,13 +110,14 @@ import Testing
         sut.didAppear()
 
         // then
-        await waitUntil { sut.errorMessage != nil }
-        #expect(sut.errorMessage == failure.message)
+        await waitUntil { sut.loadFailure != nil }
+        #expect(sut.loadFailure == HarnessLoadFailure(message: "harflow-setup refused the request.", code: "denied"))
         #expect(sut.rows.isEmpty)
-        #expect(sut.installBannerModel == nil)
+        #expect(sut.serverPath == nil)
+        #expect(sut.showsNoHarnesses == false)
     }
 
-    @Test func givenAppear_whenStatusFailsWithAnUnsupportedCommand_thenThePlainMessageShowsAndNoBanner() async {
+    @Test func givenAnUnsupportedSetupVersion_whenLoaded_thenRefusedBlockWithoutCode() async {
         // given
         let failure = ToolError.unsupportedCommand(tool: "harflow-setup", command: "status", detail: "unrecognized")
         let (sut, _) = makeSUT(status: .failure(failure))
@@ -130,10 +126,69 @@ import Testing
         sut.didAppear()
 
         // then
-        await waitUntil { sut.errorMessage != nil }
-        #expect(sut.errorMessage == failure.message)
+        await waitUntil { sut.loadFailure != nil }
+        #expect(sut.loadFailure == HarnessLoadFailure(message: failure.message, code: nil))
         #expect(sut.rows.isEmpty)
-        #expect(sut.installBannerModel == nil)
+        #expect(sut.serverPath == nil)
+    }
+
+    @Test(arguments: [
+        ToolError.unreadable(tool: "harflow-setup", exitCode: 1, stderr: "boom"),
+        ToolError.timedOut(tool: "harflow-setup", seconds: 8),
+        ToolError.launchFailed(tool: "harflow-setup", detail: "crashed")
+    ])
+    func givenAnUnreadableTimeoutOrLaunchFailure_whenLoaded_thenTheSameRefusedBlockShowsWithoutCode(_ failure: ToolError) async {
+        // given
+        let (sut, _) = makeSUT(status: .failure(failure))
+
+        // when
+        sut.didAppear()
+
+        // then
+        await waitUntil { sut.loadFailure != nil }
+        #expect(sut.loadFailure == HarnessLoadFailure(message: failure.displayMessage, code: nil))
+        #expect(sut.rows.isEmpty)
+    }
+
+    @Test func givenAnEmptySetupDocument_whenLoaded_thenNoHarnessesFound() async {
+        // given
+        let (sut, _) = makeSUT()
+
+        // when
+        sut.didAppear()
+
+        // then
+        await waitUntil { sut.showsNoHarnesses }
+        #expect(sut.showsNoHarnesses)
+        #expect(sut.rows.isEmpty)
+        #expect(sut.loadFailure == nil)
+    }
+
+    @Test func givenARefusedLoad_whenRefreshSucceeds_thenTheFailureClears() async {
+        // given
+        final class Answers { var failing = true }
+        let answers = Answers()
+        let populated = document(twoRowsJSON)
+        let useCase = MockHarnessesUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
+        given(useCase).qualificationBackends().willReturn([])
+        given(useCase).status().willProduce {
+            answers.failing ? .failure(.refused(code: "incompatible_runtime", message: "Incompatible Harflow runtime")) : .success(populated)
+        }
+        Self.stubRuntime(useCase)
+        let sut = HarnessesVM(useCase: useCase)
+        sut.didAppear()
+        await waitUntil { sut.loadFailure != nil }
+        #expect(sut.loadFailure?.code == "incompatible_runtime")
+
+        // when
+        answers.failing = false
+        sut.didTapRefresh()
+
+        // then
+        await waitUntil { sut.rows.count == 2 }
+        #expect(sut.rows.count == 2)
+        #expect(sut.loadFailure == nil)
     }
 
     @Test func givenALoadCompletes_whenObserved_thenIsLoadingEndsFalseAndRefreshIsNotDisabled() async {
@@ -215,7 +270,7 @@ import Testing
         """#)
         given(useCase).perform(.any, client: .value("codex"), using: .any).willReturn(.success(installedDocument))
         given(useCase).locate().willReturn(.success(Self.setupClient))
-        Self.stubInstall(useCase)
+        Self.stubRuntime(useCase)
         let sut = HarnessesVM(useCase: useCase)
         sut.didAppear()
         await waitUntil { sut.rows.count == 2 }
@@ -237,20 +292,21 @@ import Testing
         withExtendedLifetime(cancellable) {}
     }
     
-    @Test func givenAHarnessActionFails_whenCompleted_thenTheErrorMessageIsSetAndRowsAreUnchanged() async {
+    @Test func givenAnActionFails_whenCompleted_thenOnlyThatRowCarriesTheFailureAndRowsAreUnchanged() async {
         // given
         let useCase = MockHarnessesUseCase()
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).qualificationBackends().willReturn([])
         given(useCase).status().willReturn(.success(document(twoRowsJSON)))
-        let failure = ToolError.notFound(tool: "harflow-setup", searched: ["/usr/local/bin"])
+        let failure = ToolError.refused(code: "setup_error", message: "Could not update the configuration: permission denied")
         given(useCase).perform(.any, client: .value("claude-code"), using: .any).willReturn(.failure(failure))
         given(useCase).locate().willReturn(.success(Self.setupClient))
-        Self.stubInstall(useCase)
+        Self.stubRuntime(useCase)
         let sut = HarnessesVM(useCase: useCase)
         sut.didAppear()
         await waitUntil { sut.rows.count == 2 }
         #expect(sut.rows.count == 2)
+        let rowsBefore = sut.rows
         let row = sut.rows.first { $0.key == "claude-code" }!
         
         // when
@@ -258,43 +314,113 @@ import Testing
         dialog.actions.first?.action()
         
         // then
-        await waitUntil { sut.errorMessage != nil }
-        #expect(sut.errorMessage == failure.message)
-        #expect(sut.rows.count == 2)
+        await waitUntil { !sut.rowFailures.isEmpty }
+        #expect(sut.rowFailures == ["claude-code": HarnessRowFailure(
+            message: "Could not update the configuration: permission denied", code: "setup_error", action: .remove)])
+        #expect(sut.rows == rowsBefore)
+        #expect(sut.loadFailure == nil)
         withExtendedLifetime(cancellable) {}
     }
-    
-    @Test func givenInstalled_whenAHarnessActionFails_thenTheErrorOutranksTheSuccessBanner() async {
-        // given — the success banner is showing after an install.
+
+    @Test func givenARowFailure_whenRetryConfirmed_thenTheSameActionRunsForTheSameRow() async {
+        // given
         let useCase = MockHarnessesUseCase()
         given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
         given(useCase).qualificationBackends().willReturn([])
         given(useCase).status().willReturn(.success(document(twoRowsJSON)))
-        let failure = ToolError.launchFailed(tool: "harflow-setup", detail: "crashed")
-        given(useCase).perform(.any, client: .value("claude-code"), using: .any).willReturn(.failure(failure))
+        given(useCase)
+.perform(.any, client: .value("claude-code"), using: .any)
+            .willReturn(.failure(.launchFailed(tool: "harflow-setup", detail: "crashed")))
         given(useCase).locate().willReturn(.success(Self.setupClient))
-        Self.stubInstall(useCase, installState: .installed)
+        Self.stubRuntime(useCase)
         let sut = HarnessesVM(useCase: useCase)
         sut.didAppear()
-        await waitUntil { sut.rows.count == 2 && sut.installBannerModel != nil }
-        #expect(sut.installBannerModel?.title == "harflow is installed")
+        await waitUntil { sut.rows.count == 2 }
         let row = sut.rows.first { $0.key == "claude-code" }!
+        let (first, firstCancellable) = await waitForDialog(sut) { sut.didTapRemove(row) }
+        first.actions.first?.action()
+        await waitUntil { !sut.rowFailures.isEmpty }
+        #expect(sut.rowFailures["claude-code"]?.action == .remove)
 
-        // when
-        let (dialog, cancellable) = await waitForDialog(sut) { sut.didTapRemove(row) }
-        dialog.actions.first?.action()
+        // when — Retry asks for the same confirmation, then repeats the action
+        let (retry, retryCancellable) = await waitForDialog(sut) { sut.didTapRetry(row) }
+        retry.actions.first?.action()
 
         // then
-        await waitUntil { sut.errorMessage != nil }
-        #expect(sut.errorMessage == failure.message)
-        #expect(sut.installBannerModel == nil)
+        #expect(retry.title == "Remove harflow from \(row.displayName)?")
+        #expect(retry.actions.first?.title == "Remove")
+        await verify(useCase).perform(.any, client: .value("claude-code"), using: .any).calledEventually(2, before: .seconds(5))
+        verify(useCase).perform(.any, client: .value("codex"), using: .any).called(0)
+        withExtendedLifetime((firstCancellable, retryCancellable)) {}
+    }
+
+    @Test func givenARowFailure_whenTheRowActionSucceeds_thenTheFailureClears() async {
+        // given
+        final class Answers { var failing = true }
+        let answers = Answers()
+        let installed = document(#"{"v":1,"clients":[{"key":"codex","available":true,"installed":true,"current":true,"action":"install"}]}"#)
+        let useCase = MockHarnessesUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
+        given(useCase).qualificationBackends().willReturn([])
+        given(useCase).status().willReturn(.success(document(twoRowsJSON)))
+        given(useCase).perform(.any, client: .value("codex"), using: .any).willProduce { _, _, _ in
+            answers.failing ? .failure(.launchFailed(tool: "harflow-setup", detail: "crashed")) : .success(installed)
+        }
+        given(useCase).locate().willReturn(.success(Self.setupClient))
+        Self.stubRuntime(useCase)
+        let sut = HarnessesVM(useCase: useCase)
+        sut.didAppear()
+        await waitUntil { sut.rows.count == 2 }
+        let row = sut.rows.first { $0.key == "codex" }!
+        let (first, firstCancellable) = await waitForDialog(sut) { sut.didTapInstall(row) }
+        first.actions.first?.action()
+        await waitUntil { !sut.rowFailures.isEmpty }
+        #expect(sut.rowFailures["codex"]?.action == .install)
+
+        // when
+        answers.failing = false
+        let (retry, retryCancellable) = await waitForDialog(sut) { sut.didTapRetry(row) }
+        retry.actions.first?.action()
+
+        // then
+        await waitUntil { sut.rowFailures.isEmpty }
+        #expect(sut.rowFailures.isEmpty)
+        #expect(sut.rows.first { $0.key == "codex" }?.installed == true)
+        withExtendedLifetime((firstCancellable, retryCancellable)) {}
+    }
+
+    @Test func givenARowFailure_whenRefreshSucceeds_thenAllRowFailuresClear() async {
+        // given
+        let useCase = MockHarnessesUseCase()
+        given(useCase).qualificationSession().willReturn(QualificationFixture.readySession())
+        given(useCase).qualificationBackends().willReturn([])
+        given(useCase).status().willReturn(.success(document(twoRowsJSON)))
+        given(useCase).perform(.any, client: .any, using: .any).willReturn(.failure(.launchFailed(tool: "harflow-setup", detail: "crashed")))
+        given(useCase).locate().willReturn(.success(Self.setupClient))
+        Self.stubRuntime(useCase)
+        let sut = HarnessesVM(useCase: useCase)
+        sut.didAppear()
+        await waitUntil { sut.rows.count == 2 }
+        let row = sut.rows.first { $0.key == "claude-code" }!
+        let (dialog, cancellable) = await waitForDialog(sut) { sut.didTapRemove(row) }
+        dialog.actions.first?.action()
+        await waitUntil { !sut.rowFailures.isEmpty }
+        #expect(sut.rowFailures.count == 1)
+
+        // when
+        sut.didTapRefresh()
+
+        // then
+        await verify(useCase).status().calledEventually(2, before: .seconds(5))
+        await waitUntil { sut.rowFailures.isEmpty && !sut.isLoading }
+        #expect(sut.rowFailures.isEmpty)
         withExtendedLifetime(cancellable) {}
     }
 
     // Regression (item 8): the original's `run` located `harflow-setup` BEFORE setting `working`
     // (`SettingsView.swift:134`) — a locator failure was a silent no-op, leaving both `working` and
     // `error` untouched. `load()`'s own locator failure is unaffected and still surfaces normally
-    // (covered by `givenAppear_whenStatusFails_thenTheErrorMessageIsSet` above).
+    // (covered by `givenARefusedStatus_whenLoaded_thenMessageHasNoCodeAndCodeLineCarriesIt` above).
     @Test func givenTheLocatorFailsInRun_whenAnActionIsConfirmed_thenItIsASilentNoOp() async {
         // given — the status load itself succeeds (so rows exist to act on), but the separate
         // locate the original ran again inside `run` fails.
@@ -305,7 +431,7 @@ import Testing
         given(useCase).status().willReturn(.success(document(twoRowsJSON)))
         given(useCase).locate().willReturn(.failure(locateFailure))
         given(useCase).perform(.any, client: .any, using: .any).willReturn(.failure(locateFailure))
-        Self.stubInstall(useCase)
+        Self.stubRuntime(useCase)
         let sut = HarnessesVM(useCase: useCase)
         sut.didAppear()
         await waitUntil { sut.rows.count == 2 }
@@ -322,76 +448,42 @@ import Testing
         // then — neither `working` nor `error` moved, and the real `perform` (the action itself)
         // was never even attempted.
         #expect(sut.workingKey == nil)
-        #expect(sut.errorMessage == nil)
+        #expect(sut.rowFailures.isEmpty)
         verify(useCase).perform(.any, client: .any, using: .any).called(0)
         withExtendedLifetime(cancellable) {}
     }
 
-    // MARK: - Install banner (settled plan, section 5)
+    // MARK: - Runtime not ready
 
-    @Test func givenFailed_whenPrimaryTapped_thenRetryIsCalledDirectlyWithNoDialog() async {
+    @Test func givenRuntimeNotReady_whenAppearing_thenNoStatusOrBackendsCallAndSetupBlockShows() async {
         // given
-        let (sut, useCase) = makeSUT(installState: .failed(stage: .harflow, message: "Installing harflow failed."))
-        sut.didAppear()
-        await waitUntil { sut.installBannerModel != nil }
-        #expect(sut.installBannerModel?.errorText == "Installing harflow failed.")
-        #expect(sut.installBannerModel?.canDismiss == true)
-
-        // when
-        sut.didTapInstallBannerPrimary()
-
-        // then
-        await verify(useCase).retry().calledEventually(1, before: .seconds(5))
-    }
-
-    @Test func givenRunning_whenShown_thenIsBusyIsTrueAndThereIsNoPrimary() async {
-        // given
-        let (sut, _) = makeSUT(installState: .running(.harflow))
-        sut.didAppear()
-
-        // then
-        await waitUntil { sut.installBannerModel != nil }
-        #expect(sut.installBannerModel?.isBusy == true)
-        #expect(sut.installBannerModel?.primaryTitle == nil)
-        #expect(sut.installBannerModel?.detail == "Preparing the exact paired runtime. This can take a few minutes.")
-    }
-
-    @Test func givenInstalled_whenShown_thenTheSuccessBannerHasTheFootnoteAndCanDismiss() async {
-        // given
-        let (sut, _) = makeSUT(installState: .installed)
-        sut.didAppear()
-
-        // then
-        await waitUntil { sut.installBannerModel != nil }
-        #expect(sut.installBannerModel?.title == "harflow is installed")
-        #expect(sut.installBannerModel?.footnote == "Next: register it with your harnesses in Settings → Harnesses.")
-        #expect(sut.installBannerModel?.canDismiss == true)
-        #expect(sut.installBannerModel?.primaryTitle == nil)
-    }
-
-    @Test func givenInstalledWithACurrentLoadError_whenShown_thenTheErrorOutranksTheSuccessBanner() async {
-        // given — a current tool error always outranks the success banner. The load error is set by a `load()` that ran before installation completed.
-        let failure = ToolError.launchFailed(tool: "harflow-setup", detail: "crashed")
-        let (sut, _) = makeSUT(status: .failure(failure), installState: .installed)
+        let (sut, useCase) = makeSUT(runtimeSetupState: .installationRequired(installedVersion: nil, requiredVersion: "0.0.14"))
 
         // when
         sut.didAppear()
+        sut.didTapRefresh()
+        await Task.yield()
 
         // then
-        await waitUntil { sut.errorMessage != nil }
-        #expect(sut.errorMessage == failure.message)
-        #expect(sut.installBannerModel == nil)
+        #expect(sut.showsRuntimeSetup)
+        #expect(sut.isRefreshDisabled)
+        #expect(sut.showsNoHarnesses == false)
+        verify(useCase).status().called(0)
+        verify(useCase).qualificationBackends().called(0)
+        verify(useCase).qualificationSession().called(0)
     }
 
-    @Test func givenDismissTapped_whenCalled_thenResetIsCalled() {
+    @Test func givenRuntimeNotReady_whenOpenSetupTapped_thenRoutingOpensSetupOnce() {
         // given
-        let (sut, useCase) = makeSUT(installState: .installed)
+        let routing = MockHarnessesRouting()
+        given(routing).openSetup().willReturn()
+        let (sut, _) = makeSUT(runtimeSetupState: .checking, routing: routing)
 
         // when
-        sut.didTapInstallBannerDismiss()
+        sut.didTapOpenSetup()
 
         // then
-        verify(useCase).reset().called(1)
+        verify(routing).openSetup().called(1)
     }
 
     // MARK: - Generation guard and reload after install (settled plan, section 5)
@@ -415,7 +507,7 @@ import Testing
             return .success(Self.document(staleDocumentJSON))
         }
         given(useCase).locate().willReturn(.success(Self.setupClient))
-        Self.stubInstall(useCase)
+        Self.stubRuntime(useCase)
         let sut = HarnessesVM(useCase: useCase)
         sutBox.sut = sut
         

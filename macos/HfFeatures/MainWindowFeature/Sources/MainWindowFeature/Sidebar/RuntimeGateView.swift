@@ -4,7 +4,7 @@ import SwiftUI
 
 // MARK: - RuntimeGateDetailRow
 
-/// One detail line of a gate: a caption label above a monospaced, selectable value.
+/// One detail line of a gate, drawn by the shared `DetailLine`.
 struct RuntimeGateDetailRow: Equatable {
     let label: String
     let value: String
@@ -59,17 +59,8 @@ struct RuntimeGateView: View {
                 if !detailRows.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         ForEach(detailRows, id: \.label) { row in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(row.label)
-                                    .font(.hf(.caption))
-                                    .foregroundStyle(Color.secondaryText)
-                                Text(row.value)
-                                    .font(.hf(.secondary, design: .monospaced))
-                                    .foregroundStyle(Color.primaryText)
-                                    .textSelection(.enabled)
-                            }
-                            .accessibilityElement(children: .combine)
-                            .accessibilityIdentifier("runtimeSetup.detail.\(row.label)")
+                            DetailLine(label: row.label, value: row.value)
+                                .accessibilityIdentifier("runtimeSetup.detail.\(row.label)")
                         }
                     }
                     .padding(.top, 4)

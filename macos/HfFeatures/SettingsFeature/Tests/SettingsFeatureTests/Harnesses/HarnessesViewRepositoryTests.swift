@@ -87,30 +87,14 @@ import Testing
         #expect(error == failure)
     }
 
-    // MARK: - Install
-
-    @Test func givenInstallRepositoryValues_whenReadOrActed_thenTheyPassThrough() async {
+    @Test func givenSetupState_whenRead_thenItPassesThrough() {
         // given
         let install = MockInstallRepository()
-        given(install).state.willReturn(.running(.harflow))
-        given(install).lastCheckMessage.willReturn("checking")
-        given(install).statePublisher().willReturn(Just(InstallState.running(.harflow)).eraseToAnyPublisher())
-        given(install).lastCheckMessagePublisher().willReturn(Just("checking").eraseToAnyPublisher())
-        given(install).retry().willReturn()
-        given(install).reset().willReturn()
+        given(install).setupState.willReturn(.installing)
         let sut = HarnessesViewRepository(installRepository: install)
 
-        // then — reads
-        #expect(sut.installState == .running(.harflow))
-        #expect(sut.lastCheckMessage == "checking")
-
-        // when — actions
-        await sut.retry()
-        sut.reset()
-
         // then
-        verify(install).retry().called(1)
-        verify(install).reset().called(1)
+        #expect(sut.runtimeSetupState == .installing)
     }
 
     @Test func givenRuntimeSetupPublisher_whenRead_thenCurrentSnapshotAndChangesPassThrough() {

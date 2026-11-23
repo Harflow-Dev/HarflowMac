@@ -17,4 +17,10 @@ public extension ToolError {
         guard let refusalMessage else { return message }
         return refusalMessage.isEmpty ? "Refused." : refusalMessage
     }
+
+    /// The refusal code a detail line shows next to `displayMessage`: the code of a refusal, unless an engine
+    /// reason already explains it (`stateRecoveryReason`). `nil` for every case that is not a refusal.
+    var detailCode: String? {
+        stateRecoveryReason == nil ? refusalCode : nil
+    }
 }

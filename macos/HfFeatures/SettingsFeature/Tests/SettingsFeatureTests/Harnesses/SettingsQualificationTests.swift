@@ -9,7 +9,7 @@ import Testing
 struct SettingsQualificationTests {
     private func make(_ fixture: QualificationFixture, session: QualificationSession? = nil) -> HarnessesVM {
         let useCase = MockHarnessesUseCase()
-        HarnessesVMTests.stubInstall(useCase)
+        HarnessesVMTests.stubRuntime(useCase)
         given(useCase).status().willReturn(.failure(.launchFailed(tool: "fixture", detail: "Fixture registration status unavailable")))
         given(useCase).qualificationBackends().willReturn(["fixture"])
         given(useCase).qualificationSession().willReturn(session ?? QualificationSession(repository: fixture))
@@ -62,7 +62,7 @@ struct SettingsQualificationTests {
         let second = CachedFailureQualificationFixture()
         let queue = QualificationSessionQueue([QualificationSession(repository: first), QualificationSession(repository: second)])
         let useCase = MockHarnessesUseCase()
-        HarnessesVMTests.stubInstall(useCase)
+        HarnessesVMTests.stubRuntime(useCase)
         given(useCase).status().willReturn(.failure(.launchFailed(tool: "fixture", detail: "Fixture registration status")))
         given(useCase).qualificationBackends().willReturn(["first", "second"])
         given(useCase).qualificationSession().willProduce { queue.next() }

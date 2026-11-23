@@ -5,7 +5,7 @@
 //  Ported from the app target's `SettingsView.swift` (`HarnessSettings`). The confirmation dialog
 //  becomes a `ViewEvent.dialog` (decision 10) with identical copy. **Existing issue preserved on
 //  purpose**: after a successful action, only that row updates — see `run(_:_:)` below and the
-//  settled plan's "Existing issues" section. No `Routing` protocol: this screen has no navigation.
+//  settled plan's "Existing issues" section. Its one route is `HarnessesRouting.openSetup()`.
 //
 
 import Combine
@@ -32,16 +32,22 @@ protocol HarnessesUseCase: Sendable {
     /// through `status()`'s ordinary failure path, unchanged.
     func locate() -> Result<SetupClient, ToolError>
 
-    // MARK: Install (settled plan, section 5)
+    // MARK: Runtime readiness
 
+    /// The current runtime setup state; the VM seeds its readiness from it.
+    var runtimeSetupState: RuntimeSetupState { get }
     /// Emits the current readiness snapshot before subsequent runtime changes.
     func runtimeSetupPublisher() -> AnyPublisher<RuntimeSetupState, Never>
-    func installStatePublisher() -> AnyPublisher<InstallState, Never>
-    var installState: InstallState { get }
-    func lastCheckMessagePublisher() -> AnyPublisher<String?, Never>
-    var lastCheckMessage: String? { get }
-    func retry() async
-    func reset()
+}
+
+// MARK: - HarnessesRouting
+
+/// Where the Harnesses page sends the user when the runtime is not ready.
+@Mockable
+@MainActor
+protocol HarnessesRouting: Sendable {
+    /// Shows the main window, whose gate carries the runtime setup.
+    func openSetup()
 }
 
 // MARK: - HarnessesVM
@@ -102,13 +108,17 @@ final class HarnessesVM: HarnessesViewModel {
 
     private(set) var rows: [HarnessRow] = []
     private(set) var serverPath: String?
-    private(set) var errorMessage: String?
+    private(set) var loadFailure: HarnessLoadFailure?
+    private(set) var rowFailures: [String: HarnessRowFailure] = [:]
     private(set) var isLoading = false
     private(set) var workingKey: String?
-    var isRefreshDisabled: Bool { isLoading || workingKey != nil }
-    /// The install/update banner to show where the load-error line shows today, or `nil` when
-    /// nothing needs surfacing (settled plan, section 5's precedence rules).
-    private(set) var installBannerModel: InstallBanner.Model?
+    /// Seeded from the use case, then follows the runtime setup state. While `false` nothing is loaded.
+    private(set) var runtimeReady: Bool
+    /// A status load has succeeded since the runtime last became ready.
+    private var hasLoaded = false
+    var showsRuntimeSetup: Bool { !runtimeReady }
+    var showsNoHarnesses: Bool { runtimeReady && !isLoading && hasLoaded && rows.isEmpty && loadFailure == nil }
+    var isRefreshDisabled: Bool { !runtimeReady || isLoading || workingKey != nil }
 
     // MARK: - Private Properties
 
@@ -121,24 +131,25 @@ final class HarnessesVM: HarnessesViewModel {
     /// reason `TaskDetailVM.changesGeneration` isn't: `HarnessesVMTests` needs to reach it to
     /// simulate the race Mockable's synchronous `willProduce` can't create directly.
     @ObservationIgnored var loadGeneration = 0
-    @ObservationIgnored private var installState: InstallState = .idle
-    @ObservationIgnored private var lastCheckMessage: String?
-    @ObservationIgnored private var latestLoadError: ToolError?
+    @ObservationIgnored private let routing: (any HarnessesRouting)?
 
     // MARK: - Init
 
-    init(useCase: any HarnessesUseCase) {
+    init(useCase: any HarnessesUseCase, routing: (any HarnessesRouting)? = nil) {
         self.useCase = useCase
-        self.installState = useCase.installState
-        self.lastCheckMessage = useCase.lastCheckMessage
-        recomputeInstallBanner()
+        self.routing = routing
+        self.runtimeReady = useCase.runtimeSetupState.isReady
     }
 
     // MARK: - HarnessesViewModel Methods
 
     func didAppear() {
-        loadQualifications()
+        // A view that reappears may find the runtime changed since it last showed; the subscription's replay then
+        // compares equal and does not load a second time.
+        setRuntimeReady(useCase.runtimeSetupState.isReady)
         subscribeIfNeeded()
+        guard runtimeReady else { return }
+        loadQualifications()
         Task { [weak self] in await self?.load() }
     }
 
@@ -151,8 +162,23 @@ final class HarnessesVM: HarnessesViewModel {
     }
 
     func didTapRefresh() {
+        guard runtimeReady else { return }
         loadQualifications()
         Task { [weak self] in await self?.load() }
+    }
+
+    func didTapOpenSetup() {
+        routing?.openSetup()
+    }
+
+    /// Repeats the failed action on the same row, through the same confirmation as the first attempt.
+    func didTapRetry(_ row: HarnessRow) {
+        guard let failure = rowFailures[row.key] else { return }
+        switch failure.action {
+        case .install: didTapInstall(row)
+        case .remove: didTapRemove(row)
+        case .status: break
+        }
     }
     
     func didTapInstall(_ row: HarnessRow) {
@@ -178,61 +204,53 @@ final class HarnessesVM: HarnessesViewModel {
         }
     }
 
-    // MARK: - Install banner actions (settled plan, section 5)
-
-    func didTapInstallBannerPrimary() {
-        if case .failed = installState {
-            Task { [weak self] in await self?.useCase.retry() }
-        }
-    }
-
-    func didTapInstallBannerDismiss() {
-        useCase.reset()
-    }
-
     // MARK: - Private Methods
 
     private func subscribeIfNeeded() {
         guard !didSubscribe else { return }
         didSubscribe = true
 
-        // The initial snapshot is covered by didAppear's load. Later readiness recovery
-        // must refresh even when startup qualification creates no install success notice.
+        // The replayed current snapshot equals the seeded value, so it loads nothing. Later recovery loads on the
+        // not-ready to ready edge, and a loss of readiness clears the page.
         useCase.runtimeSetupPublisher()
             .receive(on: DispatchQueue.main)
             .map(\.isReady)
             .removeDuplicates()
-            .dropFirst()
-            .filter(\.self)
-            .sink { [weak self] _ in
-                self?.loadQualifications()
+            .sink { [weak self] isReady in
+                guard let self, setRuntimeReady(isReady), isReady else { return }
+                loadQualifications()
                 Task { [weak self] in await self?.load() }
             }
             .store(in: &cancellables)
+    }
 
-        useCase.installStatePublisher()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                guard let self else { return }
-                installState = state
-                if state == .installed {
-                    // A load error from before the install is stale the moment validation passes —
-                    // `install()`'s own validate stage already re-checked both contracts.
-                    latestLoadError = nil
-                    errorMessage = nil
-                }
-                recomputeInstallBanner()
-            }
-            .store(in: &cancellables)
+    /// Writes readiness only on change and returns whether it changed. Losing readiness drops whatever was loaded
+    /// and cancels in-flight work, so a late answer cannot repopulate the not-ready page. Not `private`, for the same
+    /// reason as `loadGeneration`: tests change readiness from inside a mocked call, which a publisher cannot do synchronously.
+    @discardableResult
+    func setRuntimeReady(_ isReady: Bool) -> Bool {
+        guard runtimeReady != isReady else { return false }
+        runtimeReady = isReady
+        if !isReady {
+            loadGeneration += 1
+            qualificationGeneration = UUID()
+            qualificationTask?.cancel()
+            qualifications.values.forEach { $0.stop() }
+            qualifications = [:]
+            qualificationFailure = nil
+            resetLoaded()
+            isLoading = false
+            if workingKey != nil { workingKey = nil }
+        }
+        return true
+    }
 
-        useCase.lastCheckMessagePublisher()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] message in
-                guard let self else { return }
-                lastCheckMessage = message
-                recomputeInstallBanner()
-            }
-            .store(in: &cancellables)
+    private func resetLoaded() {
+        if !rows.isEmpty { rows = [] }
+        if serverPath != nil { serverPath = nil }
+        if loadFailure != nil { loadFailure = nil }
+        if !rowFailures.isEmpty { rowFailures = [:] }
+        if hasLoaded { hasLoaded = false }
     }
 
     private func load() async {
@@ -244,86 +262,45 @@ final class HarnessesVM: HarnessesViewModel {
             guard generation == loadGeneration else { return }
             rows = document.rows
             serverPath = document.serverPath
-            errorMessage = nil
-            latestLoadError = nil
+            if loadFailure != nil { loadFailure = nil }
+            if !rowFailures.isEmpty { rowFailures = [:] }
+            hasLoaded = true
             isLoading = false
-            recomputeInstallBanner()
         case .failure(let failure):
             guard generation == loadGeneration else { return }
-            latestLoadError = failure
-            errorMessage = failure.isManagedRuntimeUnavailable ? nil : failure.message
+            resetLoaded()
+            // The runtime block owns a managed-runtime failure; every other failure is the refused block.
+            if !failure.isManagedRuntimeUnavailable {
+                loadFailure = HarnessLoadFailure(message: failure.displayMessage, code: failure.detailCode)
+            }
             isLoading = false
-            recomputeInstallBanner()
         }
     }
-    
+
     /// Existing issue, preserved: only the acted-on row is replaced, not a fresh status for every
     /// row (the old code's comment said otherwise; the code never did that — see `SettingsView.swift`
     /// and the settled plan's "Existing issues, not changed here" section).
     private func run(_ action: SetupClient.Action, _ row: HarnessRow) async {
         // The original's locator check ran BEFORE `working` was set (`SettingsView.swift:134`), so a
-        // locator failure never entered the busy state or touched the error line at all — restored
-        // here as item 8. Only a failure of the actual `perform` call below sets `errorMessage`.
+        // locator failure never entered the busy state or touched a failure at all — restored
+        // here as item 8. Only a failure of the actual `perform` call below sets the row's failure.
         guard case .success(let setupClient) = useCase.locate() else { return }
+        // A readiness change (or a newer load) while the action runs makes its answer stale: it is dropped, and the
+        // page's own reset has already cleared the busy key.
+        let generation = loadGeneration
         workingKey = row.key
-        defer { workingKey = nil }
-        switch await useCase.perform(action, client: row.key, using: setupClient) {
+        defer { if generation == loadGeneration { workingKey = nil } }
+        if rowFailures[row.key] != nil { rowFailures[row.key] = nil }
+        let result = await useCase.perform(action, client: row.key, using: setupClient)
+        guard generation == loadGeneration else { return }
+        switch result {
         case .success(let document):
             if let updated = document.rows.first(where: { $0.key == row.key }),
                let index = rows.firstIndex(where: { $0.key == row.key }) {
                 rows[index] = updated
             }
-            errorMessage = nil
         case .failure(let failure):
-            errorMessage = failure.message
-        }
-        // A failed action is a current tool error, so it must outrank the success banner.
-        recomputeInstallBanner()
-    }
-}
-
-// MARK: - HarnessesVM + Install banner
-
-/// Maps `InstallState` to `InstallBanner.Model`. HfUI can't see `InstallState` (Core doesn't depend
-/// on UI), so this mapping lives here — a small, per-feature helper duplicated in `MenuBarVM`.
-extension HarnessesVM {
-
-    private func recomputeInstallBanner() {
-        switch installState {
-        case .running(let stage):
-            installBannerModel = InstallBanner.Model(title: Self.runningTitle(stage), detail: Self.runningDetail(stage), isBusy: true)
-        case .failed(_, let message):
-            installBannerModel = InstallBanner.Model(
-                title: "Harflow runtime preparation failed",
-                detail: "The managed runtime is unavailable. Try again to prepare it.",
-                primaryTitle: "Try again",
-                errorText: message,
-                canDismiss: true
-            )
-        case .idle, .installed:
-            // A current tool error outranks the success banner: the plain red `errorMessage` shows instead.
-            if latestLoadError == nil, installState == .installed, errorMessage == nil {
-                installBannerModel = InstallBanner.Model(
-                    title: "harflow is installed",
-                    detail: "The new install passed its checks.",
-                    canDismiss: true,
-                    footnote: "Next: register it with your harnesses in Settings → Harnesses."
-                )
-            } else {
-                installBannerModel = nil
-            }
-        }
-    }
-
-    private static func runningTitle(_ stage: InstallStage) -> String {
-        if case .validate = stage { return "Checking…" }
-        return "Preparing Harflow runtime…"
-    }
-
-    private static func runningDetail(_ stage: InstallStage) -> String {
-        switch stage {
-        case .harflow: "Preparing the exact paired runtime. This can take a few minutes."
-        case .validate: "Checking the new install. This can take a little while."
+            rowFailures[row.key] = HarnessRowFailure(message: failure.displayMessage, code: failure.detailCode, action: action)
         }
     }
 }
