@@ -172,22 +172,70 @@ public struct RuntimeCompatibilityContext: Sendable, Equatable {
 /// Shared strict envelope validation, before payload interpretation or process-error handling.
 public enum WireEnvelope {
     public static func incompatibility(_ detail: String) -> ToolError {
-        .refused(code: "incompatible_runtime", message: "Incompatible Harflow runtime: " + detail)
+        .refused(code: incompatibleRuntimeCode, message: incompatibilityMessagePrefix + detail)
+    }
+
+    /// The refusal code of every runtime incompatibility.
+    public static let incompatibleRuntimeCode = "incompatible_runtime"
+    /// The start of every incompatibility message; the detail follows it.
+    public static let incompatibilityMessagePrefix = "Incompatible Harflow runtime: "
+
+    /// The incompatibility details this app produces. Several are interpolated, so those are prefix or
+    /// pattern matchers shared by the producers above and any classifier. A consumer classifies by this
+    /// list and treats any other detail as unclassified.
+    public enum Detail {
+        public static let foreignProductIdentity = "missing or foreign product identity"
+        public static let invalidProductVersion = "invalid product_version"
+        public static let invalidVersionInfo = "invalid version-info or selected state_root mismatch"
+        public static let requiresDarwinArm64 = "app integration requires darwin/arm64"
+        public static let releaseLineDiffersPrefix = "product major/minor release line differs"
+        public static let unsupportedFormatPrefix = "unsupported "
+        public static let unsupportedFormatSuffix = " format"
+        public static let missingRequiredPrefix = "missing required "
+
+        public static func unsupportedFormat(_ format: String) -> String {
+            unsupportedFormatPrefix + format + unsupportedFormatSuffix
+        }
+
+        public static func releaseLineDiffers(from productVersion: String) -> String {
+            releaseLineDiffersPrefix + " from \(productVersion)"
+        }
+
+        public static func missingCapability(_ capability: String) -> String {
+            missingRequiredPrefix + capability + " capability"
+        }
+
+        public static func missingContract(_ capability: String) -> String {
+            missingRequiredPrefix + capability + " contract/capability"
+        }
+
+        /// Whether `detail` is an `unsupported <format> format` detail.
+        public static func isUnsupportedFormat(_ detail: String) -> Bool {
+            detail.hasPrefix(unsupportedFormatPrefix) && detail.hasSuffix(unsupportedFormatSuffix)
+                && detail.count > unsupportedFormatPrefix.count + unsupportedFormatSuffix.count
+        }
+
+        /// The detail of an incompatibility refusal this app produced, or `nil` for any other error.
+        public static func of(_ error: ToolError) -> String? {
+            guard case .refused(let code, let message) = error, code == WireEnvelope.incompatibleRuntimeCode,
+                  message.hasPrefix(WireEnvelope.incompatibilityMessagePrefix) else { return nil }
+            return String(message.dropFirst(WireEnvelope.incompatibilityMessagePrefix.count))
+        }
     }
 
     public static func validate(_ document: [String: JSONValue], contract: WireContract,
                                 productVersion: String = HarflowVersion.current) -> ToolError? {
-        guard document["product"]?.stringValue == "harflow" else { return incompatibility("missing or foreign product identity") }
-        guard document["format"]?.stringValue == contract.format else { return incompatibility("unsupported \(contract.format) format") }
+        guard document["product"]?.stringValue == "harflow" else { return incompatibility(Detail.foreignProductIdentity) }
+        guard document["format"]?.stringValue == contract.format else { return incompatibility(Detail.unsupportedFormat(contract.format)) }
         guard let wireVersion = document["v"]?.wireIntegerValue, contract.understoodVersions.contains(wireVersion) else {
             return .unsupportedVersion(tool: contract.toolName, version: document["v"]?.rendered() ?? "none")
         }
         guard let text = document["product_version"]?.stringValue, let writer = HarflowVersion(text) else {
-            return incompatibility("invalid product_version")
+            return incompatibility(Detail.invalidProductVersion)
         }
         if contract != .events {
             guard let consumer = HarflowVersion(productVersion), writer.isCompatible(with: consumer) else {
-                return incompatibility("product major/minor release line differs from \(productVersion)")
+                return incompatibility(Detail.releaseLineDiffers(from: productVersion))
             }
         }
         return nil
@@ -233,15 +281,15 @@ public struct VersionInfoDocument: Sendable {
               let contracts = object["contracts"]?.objectValue, let values = object["capabilities"]?.arrayValue,
               values.allSatisfy({ $0.stringValue != nil }), let operatingSystem = object["os"]?.stringValue,
               let architecture = object["architecture"]?.stringValue else {
-            return .failure(WireEnvelope.incompatibility("invalid version-info or selected state_root mismatch"))
+            return .failure(WireEnvelope.incompatibility(WireEnvelope.Detail.invalidVersionInfo))
         }
         guard operatingSystem == "darwin", architecture == "arm64" else {
-            return .failure(WireEnvelope.incompatibility("app integration requires darwin/arm64"))
+            return .failure(WireEnvelope.incompatibility(WireEnvelope.Detail.requiresDarwinArm64))
         }
         let capabilities = Set(values.compactMap(\.stringValue))
         for contract in requiring {
             guard capabilities.contains(contract.capability) else {
-                return .failure(WireEnvelope.incompatibility("missing required \(contract.capability) capability"))
+                return .failure(WireEnvelope.incompatibility(WireEnvelope.Detail.missingCapability(contract.capability)))
             }
             // The version-info envelope was validated above; it has no contracts-map entry.
             if contract == .versionInfo { continue }
@@ -249,7 +297,7 @@ public struct VersionInfoDocument: Sendable {
             guard advertised?["format"]?.stringValue == contract.format,
                   let advertisedVersion = advertised?["v"]?.wireIntegerValue,
                   contract.understoodVersions.contains(advertisedVersion) else {
-                return .failure(WireEnvelope.incompatibility("missing required \(contract.capability) contract/capability"))
+                return .failure(WireEnvelope.incompatibility(WireEnvelope.Detail.missingContract(contract.capability)))
             }
         }
         return .success(VersionInfoDocument(stateRoot: normalized, productVersion: object["product_version"]!.stringValue!,

@@ -255,6 +255,8 @@ final class SidebarVM: SidebarViewModel {
     @ObservationIgnored var currentDate: (() -> Date)?
     private(set) var storeNeedsAttention = false
     private(set) var runtimeSetupState: RuntimeSetupState = .ready
+    /// Written on change only; see `refreshSetupGate()`.
+    private(set) var showsSetupGate = false
 
     /// Tasks the person has collapsed in the sidebar's tree — expanded by default (Design point 3).
     /// Lives for the app's lifetime (this VM is cached across window close/reopen); never mutated by
@@ -285,7 +287,10 @@ final class SidebarVM: SidebarViewModel {
         let initialSelection = routing.selection
         self.renderedSelection = initialSelection
         self.desiredSelection = initialSelection
-        self.runtimeSetupState = (useCase as? any RuntimeSetupObserving)?.runtimeSetupState ?? .ready
+        let initialSetupState = (useCase as? any RuntimeSetupObserving)?.runtimeSetupState ?? .ready
+        self.runtimeSetupState = initialSetupState
+        self.latestListError = useCase.listError
+        self.showsSetupGate = !initialSetupState.isReady || MainWindowGate.owns(useCase.listError)
         self.latestCatalog = useCase.backendCatalog
         if let recovery = useCase as? any SidebarStoreRecoveryObserving { applyStoreRecovery(recovery.storeRecoveryState) }
         recomputeBackendTabs()
@@ -371,6 +376,13 @@ final class SidebarVM: SidebarViewModel {
 
     func applyRuntimeSetup(_ state: RuntimeSetupState) {
         if runtimeSetupState != state { runtimeSetupState = state }
+        refreshSetupGate()
+    }
+
+    /// The setup line shows while the runtime is not ready or a contract or capability gate owns the listing error.
+    func refreshSetupGate() {
+        let next = !runtimeSetupState.isReady || MainWindowGate.owns(latestListError)
+        if showsSetupGate != next { showsSetupGate = next }
     }
 
     func didTapRuntimeSetup() {
@@ -379,7 +391,7 @@ final class SidebarVM: SidebarViewModel {
     }
 
     func didTapNewSession() {
-        guard runtimeSetupState.isReady else { return }
+        guard !showsSetupGate else { return }
         routing.openNewSession()
     }
 

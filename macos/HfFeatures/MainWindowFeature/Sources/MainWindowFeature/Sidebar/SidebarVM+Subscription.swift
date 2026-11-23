@@ -34,8 +34,11 @@ extension SidebarVM {
             .sink { [weak self] error in
                 guard let self else { return }
                 latestListError = error
+                // A contract or capability gate owns its error, as the managed-runtime and store gates do.
                 let dedicatedError = error?.isManagedRuntimeUnavailable == true || error?.isStateRecoveryRefusal == true
+                    || MainWindowGate.owns(error)
                 listErrorMessage = dedicatedError ? nil : error?.message
+                refreshSetupGate()
                 // Refresh both immediately: `recompute()` returns early while presentation is off.
                 emptyStateMessage = computeEmptyStateMessage()
                 showsLoadingSkeleton = computeShowsLoadingSkeleton()

@@ -65,7 +65,7 @@ struct SidebarWorkflowPollState: Equatable {
 
 extension SidebarVM {
     func didTapNewWorkflow() {
-        guard runtimeSetupState.isReady else { return }
+        guard !showsSetupGate else { return }
         routing.select(.newWorkflow(UUID()))
     }
 

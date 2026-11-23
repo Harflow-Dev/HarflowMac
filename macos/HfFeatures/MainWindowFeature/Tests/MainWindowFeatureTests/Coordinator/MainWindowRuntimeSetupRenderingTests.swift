@@ -121,7 +121,7 @@ import Testing
         let message = "The public task listing is unavailable."
         let coordinator = MainWindowNavigationCoordinatorMock(runtimeIsReady: true, runtimeSetupState: .ready)
         coordinator.hasLoadedWork = false
-        coordinator.loadingWorkError = failed ? message : nil
+        coordinator.loadingWorkError = failed ? LoadingWorkError(message: message) : nil
         let fixture = MainWindowRuntimeSetupFixture(coordinator: coordinator, appearanceName: .aqua)
         defer { fixture.close() }
 

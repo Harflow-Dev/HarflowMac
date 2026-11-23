@@ -104,7 +104,7 @@ struct SidebarNavigationRail<VM: SidebarViewModel>: View {
             .help(title)
             .accessibilityLabel(title)
             .accessibilityAddTraits(viewModel.selection == destination ? .isSelected : [])
-            .disabled(!viewModel.runtimeSetupState.isReady)
+            .disabled(viewModel.showsSetupGate)
     }
 }
 

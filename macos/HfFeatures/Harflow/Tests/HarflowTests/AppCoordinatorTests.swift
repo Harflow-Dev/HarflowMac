@@ -51,6 +51,17 @@ import Testing
         return (sut, fakeMainWindow, taskList, settings)
     }
     
+    @Test func givenWorkIsUnavailable_whenReadThroughTheProtocol_thenTheCommandsSeeTheFakesValue() {
+        // given
+        let (sut, mainWindow, _, _) = makeSUT()
+        #expect(sut.mainWindowNavigationCoordinator?.workIsAvailable == true)
+        // when
+        mainWindow.workIsAvailable = false
+        // then — the menu commands read exactly this requirement through the existential.
+        #expect(sut.mainWindowNavigationCoordinator?.workIsAvailable == false)
+        #expect(sut.mainWindowNavigationCoordinator?.runtimeIsReady == true)
+    }
+
     @Test func givenNoEditor_whenCreateWorkflowCommandRuns_thenWindowOpensBeforeFreshCanvas() {
         // given
         let log = LockedBox<[String]>([])

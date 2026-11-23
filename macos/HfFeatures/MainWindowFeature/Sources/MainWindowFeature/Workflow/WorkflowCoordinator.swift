@@ -31,7 +31,7 @@ public extension MainWindowNavigationCoordinator {
 
 extension MainWindowCoordinator: WorkflowRouting, WorkflowLibraryRouting {
     func openWorkflowRunner(name: String?) {
-        guard runtimeIsReady else { return }
+        guard workIsAvailable else { return }
         initialWorkflowRunnerName = name
         isWorkflowRunnerPresented = true
     }

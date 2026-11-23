@@ -36,7 +36,12 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
     func performRuntimeSetup()
     /// First public listing readiness is independent of managed-runtime qualification.
     var hasLoadedWork: Bool { get }
-    var loadingWorkError: String? { get }
+    /// The current listing failure, for the first-listing gate; carries the refusal code separately from the message.
+    var loadingWorkError: LoadingWorkError? { get }
+    /// The contract-refused or capability-missing gate that replaces the main pane once the runtime is ready.
+    var mainGate: MainWindowGate? { get }
+    /// Whether work can be created and navigated: the runtime is ready and no main-pane gate shows.
+    var workIsAvailable: Bool { get }
     func retryLoadingWork()
     /// Carries the standalone task's top bar content to the principal toolbar item. The shell passes it down
     /// and never reads its contents.
@@ -106,7 +111,9 @@ public extension MainWindowNavigationCoordinator {
     var runtimeSetupState: RuntimeSetupState { runtimeIsReady ? .ready : .checking }
     func performRuntimeSetup() {}
     var hasLoadedWork: Bool { true }
-    var loadingWorkError: String? { nil }
+    var loadingWorkError: LoadingWorkError? { nil }
+    var mainGate: MainWindowGate? { nil }
+    var workIsAvailable: Bool { runtimeIsReady && mainGate == nil }
     func retryLoadingWork() {}
     func startShellObservation() {}
     func stopShellObservation() {}

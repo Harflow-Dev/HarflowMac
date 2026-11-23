@@ -25,6 +25,10 @@ protocol SidebarViewModel: ViewModel {
     /// Running / Today / Earlier, in that order, empty buckets omitted (settled plan D10).
     var storeNeedsAttention: Bool { get }
     var runtimeSetupState: RuntimeSetupState { get }
+    /// Whether the setup line replaces the navigation and lists and creation is blocked: the runtime is not ready, or
+    /// the listing is refused by a contract or capability gate. Declared here, not only in an extension, because the
+    /// views are generic over their view model and an extension-only member would dispatch to the default.
+    var showsSetupGate: Bool { get }
     func didTapRuntimeSetup()
     var sections: [SidebarSection] { get }
     var taskHistoryState: HistoryLoadingState { get }
@@ -76,6 +80,7 @@ extension SidebarViewModel {
     var needsYouBadge: NeedsYouBadge { .none }
     var storeNeedsAttention: Bool { false }
     var runtimeSetupState: RuntimeSetupState { .ready }
+    var showsSetupGate: Bool { !runtimeSetupState.isReady }
     func didTapRuntimeSetup() {}
     var appAppearance: AppAppearance { .system }
     func didSelectAppearance(_: AppAppearance) {}
@@ -136,7 +141,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
     
     var body: some View {
         Group {
-            if viewModel.runtimeSetupState.isReady {
+            if !viewModel.showsSetupGate {
                 VStack(spacing: 0) {
                     header
                     list
@@ -183,7 +188,7 @@ struct SidebarView<VM: SidebarViewModel>: View {
                     .accessibilityLabel("Collapse sidebar")
             }
             .padding(.bottom, 8)
-            if viewModel.runtimeSetupState.isReady {
+            if !viewModel.showsSetupGate {
                 if viewModel.storeNeedsAttention {
                     SettingsLink {
                         Label("Task store needs attention", systemImage: "exclamationmark.triangle")

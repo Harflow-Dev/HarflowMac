@@ -272,7 +272,7 @@ struct M04StateMatrixHostedTests {
             fixture.landmarks.append("Retry tasks")
         } else if state == "history-reconnecting" {
             coordinator.sidebarViewModel.isConnected = false
-            coordinator.loadingWorkError = "Reconnecting. Retaining loaded work."
+            coordinator.loadingWorkError = LoadingWorkError(message: "Reconnecting. Retaining loaded work.")
             coordinator.sidebarViewModel.listErrorMessage = "Reconnecting. Retaining loaded work."
             fixture.landmarks.append("Reconnecting. Retaining loaded work.")
         } else {

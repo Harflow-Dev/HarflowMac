@@ -15,9 +15,9 @@ extension MainWindowCoordinator {
     /// What the task slot shows before a mounted task view has published, for the current selection and listing:
     /// loading with the title the listing knows (the same first-member rule the loaded bar uses), loading without a
     /// title while the listing has not been read, `nil` (the caption) for any other selection, while the runtime is
-    /// not ready, and for a task the read listing does not hold.
+    /// not ready or a gate shows, and for a task the read listing does not hold.
     func taskTopBarPreMountSlot() -> TaskTopBarSlot? {
-        guard runtimeIsReady, case .task(let id) = selection else { return nil }
+        guard workIsAvailable, case .task(let id) = selection else { return nil }
         let listing = taskListRepository
         let tasks = listing.tasks
         if let requested = tasks.first(where: { $0.taskID == id }), TaskDetailVM.isWorkflowExecutionChild(requested) {

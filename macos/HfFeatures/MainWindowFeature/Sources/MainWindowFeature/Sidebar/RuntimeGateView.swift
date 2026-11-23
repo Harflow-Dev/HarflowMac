@@ -2,6 +2,14 @@ import AppKit
 import HfUI
 import SwiftUI
 
+// MARK: - RuntimeGateDetailRow
+
+/// One detail line of a gate: a caption label above a monospaced, selectable value.
+struct RuntimeGateDetailRow: Equatable {
+    let label: String
+    let value: String
+}
+
 // MARK: - RuntimeGateView
 
 /// The main-pane gate shared by runtime setup and the first task listing.
@@ -14,6 +22,10 @@ struct RuntimeGateView: View {
     let bodyText: String
     var statusText: String?
     var statusIsFailure = false
+    /// Draws the status in the secondary colour, as the engine and runtime gates do.
+    var statusIsSecondary = false
+    /// Detail lines drawn between the body and the status. Empty for the setup and listing gates.
+    var detailRows: [RuntimeGateDetailRow] = []
     var actionTitle: String?
     var action: () -> Void = {}
 
@@ -34,11 +46,29 @@ struct RuntimeGateView: View {
                     .lineSpacing(TaskScreenStyle.lineSpacing(Self.bodyTextSpec))
                     .foregroundStyle(Color.primaryText)
                     .accessibilityIdentifier("runtimeSetup.welcomeBody")
+                if !detailRows.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(detailRows, id: \.label) { row in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(row.label)
+                                    .font(.hf(.caption))
+                                    .foregroundStyle(Color.secondaryText)
+                                Text(row.value)
+                                    .font(.hf(.secondary, design: .monospaced))
+                                    .foregroundStyle(Color.primaryText)
+                                    .textSelection(.enabled)
+                            }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier("runtimeSetup.detail.\(row.label)")
+                        }
+                    }
+                    .padding(.top, 4)
+                }
                 if let statusText {
                     Text(statusText)
                         .font(TaskScreenStyle.sans(size: Self.bodyTextSpec.size))
                         .lineSpacing(TaskScreenStyle.lineSpacing(Self.bodyTextSpec))
-                        .foregroundStyle(Color.primaryText)
+                        .foregroundStyle(statusIsSecondary ? Color.secondaryText : Color.primaryText)
                         .textSelection(.enabled)
                         .accessibilityIdentifier(statusIsFailure ? "runtimeSetup.error" : "runtimeSetup.status")
                 }

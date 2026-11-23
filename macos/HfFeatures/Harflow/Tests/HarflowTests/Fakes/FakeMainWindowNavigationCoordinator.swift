@@ -25,6 +25,10 @@ final class FakeMainWindowNavigationCoordinator: MainWindowNavigationCoordinator
     
     var selection: MonitorDestination?
     var isNewSessionPresented = false
+    /// Stored, so a test reads them through the protocol existential: a requirement the fake stores is dispatched to the
+    /// fake, where an extension-only member would resolve to the default.
+    var runtimeIsReady = true
+    var workIsAvailable = true
     let topBar = TaskTopBarHolder()
 
     /// Every `MonitorDestination` this fake was asked to `handle(path:)`, in order — so a test can

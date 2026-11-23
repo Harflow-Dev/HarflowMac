@@ -89,7 +89,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
                 return
             }
             if presentedSheet != .workflowRunner { initialWorkflowRunnerName = nil }
-            if presentedSheet != nil, !runtimeIsReady { presentedSheet = nil; return }
+            if presentedSheet != nil, !runtimeIsReady || (presentedSheet == .workflowRunner && !workIsAvailable) { presentedSheet = nil; return }
         }
     }
 
@@ -132,7 +132,10 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     public private(set) var runtimeIsReady = true
     public private(set) var runtimeSetupState: RuntimeSetupState = .ready
     public private(set) var hasLoadedWork = false
-    public private(set) var loadingWorkError: String?
+    public private(set) var loadingWorkError: LoadingWorkError?
+    public internal(set) var mainGate: MainWindowGate?
+    /// The latest listing error, kept so the gate follows the runtime and the listing together.
+    @ObservationIgnored var latestListError: ToolError?
     @ObservationIgnored private var runtimeSubscription: AnyCancellable?
     @ObservationIgnored private var listingSubscription: AnyCancellable?
     @ObservationIgnored private var listingChangeSubscription: AnyCancellable?
@@ -180,24 +183,29 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             .sink { [weak self] _ in self?.listingChanged() }
         self.titlesSubscription = listing.titlesPublisher().receive(on: DispatchQueue.main).sink { [weak self] _ in self?.refreshTaskTopBarPreMount() }
         self.hasLoadedWork = listing.hasListed
-        self.loadingWorkError = listing.listError?.message
+        self.loadingWorkError = listing.listError.map(LoadingWorkError.init(error:))
+        self.latestListError = listing.listError
         self.listingSubscription = listing.hasListedPublisher()
 .combineLatest(listing.listErrorPublisher())
             .receive(on: DispatchQueue.main)
             .sink { [weak self] hasListed, error in
                 guard let self else { return }
                 if hasLoadedWork != hasListed { self.hasLoadedWork = hasListed }
-                let message = error?.message
-                if loadingWorkError != message { self.loadingWorkError = message }
+                let failure = error.map(LoadingWorkError.init(error:))
+                if loadingWorkError != failure { self.loadingWorkError = failure }
+                self.latestListError = error
+                refreshMainGate()
                 refreshTaskTopBarPreMount()
             }
         let install = self.installRepository
         self.runtimeIsReady = install.setupState.isReady
         self.runtimeSetupState = install.setupState
+        self.mainGate = MainWindowGate.classify(runtimeReady: runtimeIsReady, listError: latestListError)
         self.runtimeSubscription = install.setupStatePublisher().receive(on: DispatchQueue.main).sink { [weak self] state in
             guard let self else { return }
             if runtimeIsReady != state.isReady { self.runtimeIsReady = state.isReady }
             if runtimeSetupState != state { self.runtimeSetupState = state }
+            refreshMainGate()
             refreshTaskTopBarPreMount()
             if !state.isReady { discardStopForRuntimeLoss() }
             resourceSlotsVM?.runtimeChanged()
@@ -211,7 +219,7 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
             parent.handle(path: path)
             return
         }
-        if !runtimeIsReady {
+        if !workIsAvailable {
             switch destination {
             case .newSession, .newWorkflow, .workflow, .workflowLibrary: return
             default: break
@@ -446,7 +454,7 @@ extension MainWindowCoordinator: SidebarRouting {
     /// point 5 excludes the sidebar's own selection from the reveal triggers (a click can only
     /// select a row that is already visible).
     public func select(_ destination: MonitorDestination?) {
-        if !runtimeIsReady {
+        if !workIsAvailable {
             switch destination {
             case .newSession, .newWorkflow, .workflow, .workflowLibrary: return
             default: break
@@ -456,7 +464,7 @@ extension MainWindowCoordinator: SidebarRouting {
     }
 
     public func openNewSession() {
-        guard runtimeIsReady else { return }
+        guard workIsAvailable else { return }
         presentedSheet = nil
         sharedNewSessionVM().prepareForNewTask()
         selection = .newSession
@@ -568,14 +576,6 @@ extension MainWindowCoordinator: TaskDetailRouting {
 // MARK: - StartScreenRouting
 
 extension MainWindowCoordinator: StartScreenRouting {}
-
-// MARK: - NeedsYouRouting
-
-extension MainWindowCoordinator: NeedsYouRouting {
-    func showNeedsYou(itemID: String?) {
-        selection = .needsYou(itemID: itemID)
-    }
-}
 
 // MARK: - ResourceSlotsRouting
 

@@ -98,6 +98,8 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
     @ViewBuilder private var detail: some View {
         if !coordinator.runtimeIsReady {
             RuntimeSetupWelcomeView(state: coordinator.runtimeSetupState, action: coordinator.performRuntimeSetup)
+        } else if let gate = coordinator.mainGate {
+            MainWindowGateView(gate: gate, retry: coordinator.retryLoadingWork)
         } else {
             switch coordinator.selection {
             case .statistics: coordinator.buildStatisticsView()
@@ -122,12 +124,13 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
 
     /// The page shape the principal draws before the selected page publishes; only when the page itself is mounted.
     private var fallbackPage: PageTopBarContent? {
-        guard coordinator.runtimeIsReady, coordinator.selection == .pendingLaunches else { return nil }
+        guard coordinator.workIsAvailable, coordinator.selection == .pendingLaunches else { return nil }
         return .pendingLaunchesInventory
     }
 
     private var contextTitle: String {
-        guard coordinator.runtimeIsReady else { return "Harflow · Runtime setup" }
+        // The drawing prints the setup title on every gate, including the engine and runtime ones (`gate()`).
+        guard coordinator.workIsAvailable else { return "Harflow · Runtime setup" }
         switch coordinator.selection {
         case .statistics: return "Harflow · Statistics"
         case .resourceSlots: return "Harflow · Resources"

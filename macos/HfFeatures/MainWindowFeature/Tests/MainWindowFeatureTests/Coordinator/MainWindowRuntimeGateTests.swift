@@ -7,6 +7,7 @@ import HfTestUtilities
 @testable import MainWindowFeature
 import Mockable
 import MonitorCore
+import Observation
 import Testing
 
 @MainActor
@@ -171,6 +172,197 @@ import Testing
         #expect(sut.selection == .task("retained"))
         #expect(install.installCounter.value == 0)
         #expect(sut.runtimeIsReady)
+    }
+
+    // MARK: - Contract and capability gates
+
+    private struct ListingFixture {
+        let listing = MockTaskListRepository()
+        let listed: CurrentValueSubject<Bool, Never>
+        let errors = CurrentValueSubject<ToolError?, Never>(nil)
+        let refreshes = RefreshCounter()
+
+        init(hasListed: Bool = false) {
+            self.listed = CurrentValueSubject(hasListed)
+            given(listing).hasListed.willReturn(hasListed)
+            given(listing).listError.willReturn(nil)
+            given(listing).tasksPublisher().willReturn(Empty<[TaskInfo], Never>().eraseToAnyPublisher())
+            given(listing).tasks.willReturn([])
+            given(listing).hasListedPublisher().willReturn(listed.eraseToAnyPublisher())
+            given(listing).titlesPublisher().willReturn(Just<[String: String]>([:]).eraseToAnyPublisher())
+            given(listing).listErrorPublisher().willReturn(errors.eraseToAnyPublisher())
+            let counter = refreshes
+            given(listing).refreshAndWait().willProduce { counter.increment(); return .success(()) }
+        }
+    }
+
+    private static let contractError = ToolError.unsupportedVersion(tool: "harflow-ctl", version: "2")
+    private static let capabilityError = WireEnvelope.incompatibility(WireEnvelope.Detail.missingContract("events.v1"))
+
+    @Test(arguments: [false, true])
+    func givenReadyRuntime_whenTheListingIsRefusedByContract_thenTheGateShowsBeforeAndAfterTheFirstListing(hasListed: Bool) async {
+        // given
+        let fixture = ListingFixture(hasListed: hasListed)
+        let sut = MainWindowCoordinator(parent: MockCoordinator(), installRepository: InstallFixture(.ready),
+                                        taskListRepository: fixture.listing)
+        #expect(sut.mainGate == nil)
+        #expect(sut.workIsAvailable)
+        // when
+        fixture.errors.send(Self.contractError)
+        await waitUntil { sut.mainGate != nil }
+        // then
+        #expect(sut.mainGate == .contractRefused(status: Self.contractError.message, code: nil))
+        #expect(!sut.workIsAvailable)
+        #expect(sut.runtimeIsReady)
+    }
+
+    @Test func givenACapabilityGate_whenTheRefusalIsAnIncompatibility_thenTheGateKeepsTheCode() async {
+        // given
+        let fixture = ListingFixture()
+        let sut = MainWindowCoordinator(parent: MockCoordinator(), installRepository: InstallFixture(.ready),
+                                        taskListRepository: fixture.listing)
+        // when
+        fixture.errors.send(Self.capabilityError)
+        await waitUntil { sut.mainGate != nil }
+        // then
+        #expect(sut.mainGate == .capabilityMissing(status: Self.capabilityError.displayMessage, code: "incompatible_runtime"))
+        #expect(sut.loadingWorkError == LoadingWorkError(message: Self.capabilityError.displayMessage, code: "incompatible_runtime"))
+    }
+
+    @Test func givenAContractGate_whenCreationIsRequestedByEveryPath_thenNothingIsCreated() async {
+        // given
+        let fixture = ListingFixture(hasListed: true)
+        let sut = MainWindowCoordinator(parent: MockCoordinator(), installRepository: InstallFixture(.ready),
+                                        taskListRepository: fixture.listing)
+        fixture.errors.send(Self.contractError)
+        await waitUntil { sut.mainGate != nil }
+        // when
+        sut.openNewSession()
+        sut.handle(path: MonitorDestination.newSession)
+        sut.handle(path: MonitorDestination.newWorkflow(UUID()))
+        sut.handle(path: MonitorDestination.workflow("draft"))
+        sut.handle(path: MonitorDestination.workflowLibrary)
+        sut.select(.newSession)
+        sut.select(.newWorkflow(UUID()))
+        sut.presentWorkflowRunner()
+        sut.presentedSheet = .workflowRunner
+        sut.isNewSessionPresented = true
+        // then
+        #expect(sut.selection == nil)
+        #expect(sut.presentedSheet == nil)
+        #expect(!sut.isNewSessionPresented)
+    }
+
+    @Test func givenAContractGate_whenTheListingRecovers_thenTheGateClearsAndCreationIsRestored() async {
+        // given
+        let fixture = ListingFixture(hasListed: true)
+        let sut = MainWindowCoordinator(parent: MockCoordinator(), installRepository: InstallFixture(.ready),
+                                        taskListRepository: fixture.listing)
+        fixture.errors.send(Self.contractError)
+        await waitUntil { sut.mainGate != nil }
+        // when
+        fixture.errors.send(nil)
+        await waitUntil { sut.mainGate == nil }
+        sut.openNewSession()
+        // then
+        #expect(sut.workIsAvailable)
+        #expect(sut.selection == .newSession)
+    }
+
+    @Test func givenAContractGate_whenRetryIsTapped_thenTheListingIsRefreshedOnce() async {
+        // given
+        let fixture = ListingFixture()
+        let sut = MainWindowCoordinator(parent: MockCoordinator(), installRepository: InstallFixture(.ready),
+                                        taskListRepository: fixture.listing)
+        fixture.errors.send(Self.contractError)
+        await waitUntil { sut.mainGate != nil }
+        // when
+        sut.retryLoadingWork()
+        await waitUntil { fixture.refreshes.value == 1 }
+        // then
+        #expect(fixture.refreshes.value == 1)
+    }
+
+    @Test func givenAnotherListingFailure_whenObserved_thenNoGateShowsAndWorkStaysAvailable() async {
+        // given
+        let fixture = ListingFixture()
+        let sut = MainWindowCoordinator(parent: MockCoordinator(), installRepository: InstallFixture(.ready),
+                                        taskListRepository: fixture.listing)
+        // when
+        fixture.errors.send(.timedOut(tool: "harflow-ctl task-list-page", seconds: 30))
+        await waitUntil { sut.loadingWorkError != nil }
+        // then
+        #expect(sut.mainGate == nil)
+        #expect(sut.workIsAvailable)
+    }
+
+    @Test func givenARuntimeThatIsNotReady_whenTheListingIsRefused_thenTheSetupGateStaysTheOnlyGate() async {
+        // given
+        let fixture = ListingFixture()
+        let install = InstallFixture(.installationRequired(installedVersion: nil, requiredVersion: "0.0.2"))
+        let sut = MainWindowCoordinator(parent: MockCoordinator(), installRepository: install, taskListRepository: fixture.listing)
+        // when
+        fixture.errors.send(Self.contractError)
+        await waitUntil { sut.loadingWorkError != nil }
+        // then
+        #expect(sut.mainGate == nil)
+        // when the runtime becomes ready while the refusal stands
+        install.setupState = .ready
+        install.setupSubject.send(.ready)
+        await waitUntil { sut.mainGate != nil }
+        // then
+        #expect(sut.mainGate == .contractRefused(status: Self.contractError.message, code: nil))
+    }
+
+    @Test func givenAContractGate_whenARefusalIsRepeated_thenTheGateIsNotWrittenAgain() async {
+        // given
+        let fixture = ListingFixture()
+        let sut = MainWindowCoordinator(parent: MockCoordinator(), installRepository: InstallFixture(.ready),
+                                        taskListRepository: fixture.listing)
+        fixture.errors.send(Self.contractError)
+        await waitUntil { sut.mainGate != nil }
+        let changes = RefreshCounter()
+        func track() {
+            withObservationTracking { _ = sut.mainGate } onChange: { changes.increment() }
+        }
+        track()
+        // when — the same refusal again, then a different error that still classifies the same way
+        fixture.errors.send(Self.contractError)
+        fixture.errors.send(Self.contractError)
+        fixture.errors.send(.unsupportedVersion(tool: "harflow-ctl", version: "2"))
+        try? await Task.sleep(for: .milliseconds(150))
+        // then
+        #expect(changes.value == 0)
+    }
+
+    @Test func givenAnOpenWorkflowRunner_whenAGateArrives_thenTheRunnerCloses() async {
+        // given
+        let fixture = ListingFixture(hasListed: true)
+        let sut = MainWindowCoordinator(parent: MockCoordinator(), installRepository: InstallFixture(.ready),
+                                        taskListRepository: fixture.listing)
+        sut.presentWorkflowRunner()
+        #expect(sut.presentedSheet == .workflowRunner)
+        // when
+        fixture.errors.send(Self.contractError)
+        await waitUntil { sut.mainGate != nil }
+        // then
+        #expect(sut.presentedSheet == nil)
+    }
+
+    @Test func givenAContractGate_whenTaskAndStatisticsAreRouted_thenTheyStillRoute() async {
+        // given
+        let fixture = ListingFixture(hasListed: true)
+        let sut = MainWindowCoordinator(parent: MockCoordinator(), installRepository: InstallFixture(.ready),
+                                        taskListRepository: fixture.listing)
+        fixture.errors.send(Self.contractError)
+        await waitUntil { sut.mainGate != nil }
+        // when / then
+        sut.handle(path: MonitorDestination.task("abc"))
+        #expect(sut.selection == .task("abc"))
+        sut.handle(path: MonitorDestination.statistics)
+        #expect(sut.selection == .statistics)
+        sut.select(.task("def"))
+        #expect(sut.selection == .task("def"))
     }
 
 }

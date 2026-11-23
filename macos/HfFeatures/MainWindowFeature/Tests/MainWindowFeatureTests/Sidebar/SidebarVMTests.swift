@@ -75,6 +75,7 @@ import Testing
         let catalogBox = Box<BackendCatalog>(catalog)
 
         given(useCase).connectionLine.willReturn(connectionLine)
+        given(useCase).listError.willReturn(nil)
         given(useCase).tasksPublisher().willReturn(tasksSubject.eraseToAnyPublisher())
         given(useCase).listErrorPublisher().willReturn(listErrorSubject.eraseToAnyPublisher())
         given(useCase).hasListedPublisher().willReturn(hasListedSubject.eraseToAnyPublisher())

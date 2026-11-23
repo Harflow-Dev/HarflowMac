@@ -7,7 +7,7 @@ import SwiftUI
 /// Draws the same gate as runtime setup so the pane does not shift when setup finishes. Unlike the
 /// drawing, a failed listing also shows the failure message as selectable status text.
 struct InitialWorkLoadingView: View {
-    let error: String?
+    let error: LoadingWorkError?
     let retry: () -> Void
 
     var body: some View {
@@ -16,8 +16,9 @@ struct InitialWorkLoadingView: View {
             bodyText: error == nil
                 ? "Loading your work for the first time…"
                 : "Your runtime is ready. Recent work could not be loaded.",
-            statusText: error,
+            statusText: error?.message,
             statusIsFailure: true,
+            detailRows: error?.code.map { [RuntimeGateDetailRow(label: "Code", value: $0)] } ?? [],
             actionTitle: error == nil ? nil : "Retry loading work",
             action: retry
         )
@@ -32,7 +33,7 @@ struct InitialWorkLoadingView: View {
 }
 
 #Preview("First listing failed") {
-    InitialWorkLoadingView(error: "The public task listing is unavailable.", retry: {})
+    InitialWorkLoadingView(error: LoadingWorkError(message: "The public task listing is unavailable.", code: "unavailable"), retry: {})
         .frame(width: 1000, height: 620)
 }
 #endif

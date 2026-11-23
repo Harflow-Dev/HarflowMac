@@ -40,6 +40,9 @@ final class SidebarViewModelMock: SidebarViewModel {
     var workflowHistoryState: HistoryLoadingState
     var workflowErrorMessage: String?
     var runtimeSetupState: RuntimeSetupState
+    /// Preview and test input: a contract or capability gate shows although the runtime is ready.
+    var forcesSetupGate = false
+    var showsSetupGate: Bool { !runtimeSetupState.isReady || forcesSetupGate }
     var storeNeedsAttention = false
     var runtimeSetupTapCount = 0
     var newSessionTapCount = 0

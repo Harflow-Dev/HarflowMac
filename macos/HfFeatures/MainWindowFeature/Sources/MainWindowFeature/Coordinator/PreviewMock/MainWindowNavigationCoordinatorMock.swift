@@ -29,7 +29,11 @@ final class MainWindowNavigationCoordinatorMock: MainWindowNavigationCoordinator
     var selection: MonitorDestination?
     var runtimeIsReady: Bool
     var hasLoadedWork = true
-    var loadingWorkError: String?
+    var loadingWorkError: LoadingWorkError?
+    var mainGate: MainWindowGate? {
+        didSet { sidebarViewModel.forcesSetupGate = mainGate != nil }
+    }
+
     var listingRetryCount = 0
     func retryLoadingWork() { listingRetryCount += 1 }
     let composerViewModel = NewSessionViewModelMock()

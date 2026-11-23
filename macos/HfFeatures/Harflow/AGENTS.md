@@ -45,6 +45,7 @@ feature coordinator (`AppCoordinator.mainWindowCoordinator`/`menuBarNavigationCo
   `handle(path:)`), refresh, and bring the window forward only when `SettingsRepository.openWindowOnStart` is on. A
   notification click instead calls `handle(path:)` for `.task` then `.openWindow` directly, which
   always brings the window forward (F4-32) regardless of visibility or the toggle.
+- `MonitorCommands` disables New Session, Create Workflow and Run Workflow on `MainWindowNavigationCoordinator.workIsAvailable` (runtime ready and no contract or capability gate), read through the protocol existential; `FakeMainWindowNavigationCoordinator` stores `runtimeIsReady` and `workIsAvailable` so tests exercise that dispatch.
 - `AppDelegate` stays **not** globally `@MainActor` (its `NSApplicationDelegate` methods aren't
   isolated by the SDK, and `UNUserNotificationCenterDelegate`'s can be invoked off the main thread) —
   every access to main-actor state is wrapped in `MainActor.assumeIsolated` or lives behind a
