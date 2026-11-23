@@ -1,8 +1,9 @@
+import HfUI
 import SwiftUI
 
 // MARK: - StoreRecoveryPanel
 
-/// Inline exact-operation confirmation is cancelled when the Settings view disappears.
+/// The Task store row. Inline exact-operation confirmation is cancelled when the Settings view disappears.
 struct StoreRecoveryPanel: View {
     let model: StoreRecoveryPresentation
     let inspect: () -> Void
@@ -13,45 +14,50 @@ struct StoreRecoveryPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(model.title).font(.headline)
-            Text(model.message).foregroundStyle(.secondary).textSelection(.enabled)
-            if let root = model.root { detail("State root", root) }
-            if let reason = model.reason { detail("Reason", reason) }
-            if let backupPath = model.backupPath { detail("Backup path", backupPath) }
-            if let operation = model.operationID { detail("Recovery operation", operation) }
-            if let completed = model.completedBackupPath, completed != model.backupPath { detail("Previous recovery backup", completed) }
-            if let phase = model.phase { detail("Phase", phase) }
+            HStack(alignment: .center, spacing: 8) {
+                if let glyph = model.glyph { RowGlyphView(glyph: glyph) }
+                Text(model.title).font(.headline)
+                Spacer(minLength: 12)
+                controls
+            }
+            if let message = model.message { Text(message).foregroundStyle(.secondary).textSelection(.enabled) }
+            ForEach(model.rows, id: \.label) { detail($0.label, $0.value) }
             if model.showsArchivalWarning {
                 Text("Previous task history will be archived, not imported. "
                      + "Recovery checks cooperative ownership; close sessions using this store first. "
                      + "The backup is archival history, not an automatic restore.")
                     .font(.callout)
-.foregroundStyle(.secondary)
+                    .foregroundStyle(.secondary)
             }
-            if model.busy { ProgressView().controlSize(.small).accessibilityLabel(model.title) }
-            HStack {
-                if model.canInspect {
-                    Button("Inspect task store", action: inspect).accessibilityIdentifier("state-recovery-inspect")
-                }
-                if let title = model.requestTitle {
-                    Button(title, action: request).accessibilityIdentifier("state-recovery-request")
-                }
-                if model.confirming {
-                    Button("Cancel", action: cancel).accessibilityIdentifier("state-recovery-cancel")
-                    Button(model.confirmationTitle, role: .destructive, action: confirm)
-                        .accessibilityIdentifier("state-recovery-confirm")
-                }
-                if model.canReveal {
-                    Button("Show backup in Finder", action: reveal).accessibilityIdentifier("state-recovery-reveal")
-                }
-            }
-            if model.showsRetryHint {
-                Text("Inspect again before retrying. Any reported backup evidence is retained; the operation may have partially completed.")
+            if model.showsInterruptedNote {
+                Text(StoreRecoveryPresentation.interruptedNote)
                     .font(.callout)
-.foregroundStyle(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
+        .opacity(model.inspectEnabled ? 1 : 0.55)
         .accessibilityElement(children: .contain)
+    }
+
+    private var controls: some View {
+        HStack {
+            if model.canInspect {
+                Button("Inspect task store", action: inspect)
+                    .disabled(!model.inspectEnabled)
+                    .accessibilityIdentifier("state-recovery-inspect")
+            }
+            if let title = model.requestTitle {
+                Button(title, action: request).accessibilityIdentifier("state-recovery-request")
+            }
+            if model.confirming {
+                Button("Cancel", action: cancel).accessibilityIdentifier("state-recovery-cancel")
+                Button(model.confirmationTitle, role: .destructive, action: confirm)
+                    .accessibilityIdentifier("state-recovery-confirm")
+            }
+            if model.offersReveal {
+                Button("Show backup in Finder", action: reveal).accessibilityIdentifier("state-recovery-reveal")
+            }
+        }
     }
 
     private func detail(_ label: String, _ value: String) -> some View {

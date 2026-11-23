@@ -23,14 +23,17 @@ protocol GeneralSettingsUseCase: Sendable {
     var openWindowOnStart: Bool { get }
     var notifyOnFinish: Bool { get }
     var notifyOnNeedsYou: Bool { get }
+    var appAppearance: AppAppearance { get }
 
     func openWindowOnStartPublisher() -> AnyPublisher<Bool, Never>
     func notifyOnFinishPublisher() -> AnyPublisher<Bool, Never>
     func notifyOnNeedsYouPublisher() -> AnyPublisher<Bool, Never>
+    func appAppearancePublisher() -> AnyPublisher<AppAppearance, Never>
 
     func setOpenWindowOnStart(_ value: Bool)
     func setNotifyOnFinish(_ value: Bool)
     func setNotifyOnNeedsYou(_ value: Bool)
+    func setAppAppearance(_ value: AppAppearance)
 }
 
 // MARK: - GeneralSettingsVM
@@ -45,7 +48,11 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
     private(set) var runtimeSetupState: RuntimeSetupState = .ready
     private(set) var recoveryState: StoreRecoveryState = .idle
     private(set) var lastCompletedReceipt: StateRecoveryResult?
-    var recoveryPresentation: StoreRecoveryPresentation { StoreRecoveryPresentation(state: recoveryState, receipt: lastCompletedReceipt) }
+    var recoveryPresentation: StoreRecoveryPresentation {
+        StoreRecoveryPresentation(state: recoveryState, receipt: lastCompletedReceipt, runtimeReady: runtimeSetupState.isReady)
+    }
+
+    private(set) var appAppearance: AppAppearance
     @ObservationIgnored private let recoveryRouting: (any StoreRecoveryRouting)?
     private(set) var openWindowOnStart: Bool
     private(set) var notifyOnFinish: Bool
@@ -68,6 +75,7 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
         self.openWindowOnStart = useCase.openWindowOnStart
         self.notifyOnFinish = useCase.notifyOnFinish
         self.notifyOnNeedsYou = useCase.notifyOnNeedsYou
+        self.appAppearance = useCase.appAppearance
     }
     
     // MARK: - GeneralSettingsViewModel Methods
@@ -94,12 +102,29 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
         useCase.setNotifyOnNeedsYou(isOn)
     }
     
+    func didSelectAppearance(_ appearance: AppAppearance) {
+        guard appAppearance != appearance else { return }
+        useCase.setAppAppearance(appearance)
+        appAppearance = appearance
+    }
+
     // MARK: - Private Methods
     
     private func subscribeIfNeeded() {
         guard !didSubscribe else { return }
         didSubscribe = true
         
+        // The sidebar footer shares this setting; catch up with a change made while this tab was away.
+        let current = useCase.appAppearance
+        if appAppearance != current { appAppearance = current }
+        useCase.appAppearancePublisher()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] appearance in
+                guard let self, appAppearance != appearance else { return }
+                appAppearance = appearance
+            }
+            .store(in: &cancellables)
+
         subscribeToSetupAndRecovery()
 
         useCase.openWindowOnStartPublisher()
@@ -138,7 +163,7 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
     }
 
     func didTapRevealBackup() {
-        guard let receipt = lastCompletedReceipt else { return }
+        guard StoreRecoveryPresentation.recoveryActionsAvailable, let receipt = lastCompletedReceipt else { return }
         recoveryRouting?.revealBackup(receipt)
     }
 

@@ -32,51 +32,83 @@ protocol StoreRecoveryRouting: Sendable {
 
 // MARK: - StoreRecoveryPresentation
 
-/// State-bound panel content. Only completed engine receipts expose a reveal action.
+/// State-bound row content for the Task store group. Backup, reset and resume stay hidden, and so does the reveal
+/// of an earlier receipt, which is kept as data for R01.
 struct StoreRecoveryPresentation: Equatable {
-    /// Whether the backup, reset and resume actions are offered. Hidden by owner decision 2026-11-23 until
-    /// the Rust store design (R01) decides how recovery is presented. Inspection, status rows and the backup
-    /// reveal of an earlier receipt stay; the repository, use case and engine recovery path are unchanged.
+    /// Whether the backup, reset, resume and reveal actions are offered. Hidden by owner decision 2026-11-23 until
+    /// the Rust store design (R01) decides how recovery is presented. Inspection and the status rows stay; the
+    /// repository, use case and engine recovery path are unchanged.
     static let recoveryActionsAvailable = false
 
+    /// The sentence shown while the runtime is not ready, before an inspection and during one.
+    static let waitingMessage = "Inspect the task store to check compatibility. Inspection does not reset history."
+    /// The note under an interrupted recovery.
+    static let interruptedNote = "Inspect again before retrying. Any reported backup evidence is retained; "
+        + "the operation may have partially completed."
+
+    /// One labelled detail line.
+    struct Row: Equatable {
+        let label: String
+        let value: String
+    }
+
     var title = "Task store"
-    var message = "Inspect the task store to check compatibility. Inspection does not reset history."
+    var glyph: RowGlyph?
+    var message: String? = StoreRecoveryPresentation.waitingMessage
     var root: String?
     var reason: String?
     var backupPath: String?
     var phase: String?
     var operationID: String?
     var busy = false
+    /// Whether the Inspect button is drawn.
     var canInspect = true
+    /// Whether the drawn Inspect button is enabled: only while the runtime is ready.
+    private(set) var inspectEnabled = true
     var requestTitle: String?
     var confirming = false
+    /// Whether an earlier completed receipt exists. Data for R01; nothing draws it while recovery is hidden.
     var canReveal = false
     var completedBackupPath: String?
     var confirmationTitle = "Confirm backup and reset"
     /// Whether the archival warning that accompanies the review and confirm controls is shown.
     var showsArchivalWarning: Bool { requestTitle != nil || confirming }
-    /// Whether the "inspect again before retrying" hint is shown. Only meaningful while recovery is offered.
-    private(set) var showsRetryHint = false
+    /// Whether the interrupted-recovery note is shown.
+    private(set) var showsInterruptedNote = false
+    /// Whether the "Show backup in Finder" control is drawn. Never while recovery actions are hidden.
+    var offersReveal: Bool { Self.recoveryActionsAvailable && canReveal }
 
-    init(state: StoreRecoveryState, receipt: StateRecoveryResult? = nil) {
+    /// The detail rows in display order.
+    var rows: [Row] {
+        [
+            root.map { Row(label: "State root", value: $0) },
+            reason.map { Row(label: "Reason", value: $0) },
+            backupPath.map { Row(label: "Backup path", value: $0) },
+            operationID.map { Row(label: "Recovery operation", value: $0) },
+            phase.map { Row(label: "Phase", value: $0) }
+        ].compactMap(\.self)
+    }
+
+    init(state: StoreRecoveryState, receipt: StateRecoveryResult? = nil, runtimeReady: Bool = true) {
         self.completedBackupPath = receipt?.backupPath
         self.canReveal = receipt != nil
+        var interrupted = false
         switch state {
         case .idle: break
         case .incompatible(let error):
-            self.title = "Task store needs attention"
-            apply(error)
+            interrupted = applyRefusal(error)
         case .inspecting:
             self.title = "Inspecting task store…"
+            self.glyph = .busy
             self.busy = true
             self.canInspect = false
         case .inspected(let inspection):
-            apply(inspection)
+            interrupted = apply(inspection)
             if Self.recoveryActionsAvailable, inspection.recoverySupported, let proposal = inspection.recovery {
                 self.requestTitle = proposal.resumable ? "Review interrupted recovery" : "Review backup and reset"
             }
         case .confirming(let inspection):
-            apply(inspection)
+            interrupted = apply(inspection)
             // With recovery hidden, a confirmation published by the use case renders like an inspection.
             if Self.recoveryActionsAvailable {
                 self.title = inspection.recovery?.resumable == true ? "Resume this recovery?" : "Back up and reset this store?"
@@ -85,12 +117,14 @@ struct StoreRecoveryPresentation: Equatable {
                 self.canInspect = false
             }
         case .recovering(let inspection):
-            apply(inspection)
+            _ = apply(inspection)
             self.title = "Recovering task store…"
+            self.glyph = .busy
             self.busy = true
             self.canInspect = false
         case .completed(let receipt):
             self.title = "Task store is ready"
+            self.glyph = .done
             self.message = "Recovery completed. Previous history is archived in the backup; it is not imported into the new store."
             self.root = receipt.stateRoot
             self.backupPath = receipt.backupPath
@@ -100,29 +134,80 @@ struct StoreRecoveryPresentation: Equatable {
             self.canInspect = true
             self.canReveal = true
         case .failed(let error, let inspection):
-            if let inspection { apply(inspection) }
-            self.title = "Recovery could not finish"
-            apply(error)
+            if let inspection {
+                // A recovery failure: unreachable while recovery is hidden, kept with its evidence.
+                _ = apply(inspection)
+                self.title = "Recovery could not finish"
+                self.glyph = .attention
+                applyEvidence(error)
+            } else {
+                // The inspection itself failed: the failure message only.
+                self.title = "Task store needs attention"
+                self.glyph = .attention
+                self.message = error.message
+            }
         }
-        self.showsRetryHint = Self.recoveryActionsAvailable && phase != nil && !canReveal && requestTitle == nil && !confirming && !busy
+        if !runtimeReady {
+            self = Self.waiting(receipt: receipt)
+        } else {
+            self.showsInterruptedNote = interrupted && requestTitle == nil && !confirming && !busy
+        }
     }
 
-    private mutating func apply(_ inspection: StateInspection) {
-        title = switch inspection.status {
-        case .ready: "Task store is compatible"
-        case .missing: "Task store has not been created"
-        case .incompatible: "Task store needs attention"
-        case .interrupted: "Recovery was interrupted"
+    /// The row while the runtime is not ready, whatever the store state: the waiting copy and a disabled Inspect.
+    private static func waiting(receipt: StateRecoveryResult?) -> StoreRecoveryPresentation {
+        var row = StoreRecoveryPresentation(state: .idle, receipt: receipt)
+        row.inspectEnabled = false
+        return row
+    }
+
+    /// Applies an inspection; returns whether it reports an interrupted recovery.
+    private mutating func apply(_ inspection: StateInspection) -> Bool {
+        switch inspection.status {
+        case .ready:
+            title = "Task store is compatible"
+            glyph = .done
+            message = nil
+            root = nil
+            reason = nil
+            return false
+        case .missing:
+            title = "Task store has not been created"
+        case .incompatible:
+            title = "Task store needs attention"
+        case .interrupted:
+            title = "Recovery was interrupted"
         }
+        glyph = .attention
         message = inspection.message
         root = inspection.stateRoot
         reason = inspection.reason.rawValue
-        backupPath = inspection.recovery?.backupPath
-        phase = inspection.recovery?.phase
-        operationID = inspection.recovery?.operationID
+        if inspection.status == .interrupted {
+            backupPath = inspection.recovery?.backupPath
+            phase = inspection.recovery?.phase
+            operationID = inspection.recovery?.operationID
+        }
+        return inspection.status == .interrupted
     }
 
-    private mutating func apply(_ error: ToolError) {
+    /// Applies a store refusal; returns whether it reports an interrupted recovery.
+    private mutating func applyRefusal(_ error: ToolError) -> Bool {
+        let code = error.stateRecoveryReason?.rawValue ?? error.refusalCode
+        let interrupted = code == "recovery_interrupted"
+        title = switch code {
+        case "recovery_interrupted": "Recovery was interrupted"
+        case "missing_root": "Task store has not been created"
+        default: "Task store needs attention"
+        }
+        glyph = .attention
+        message = error.message
+        reason = code
+        root = error.refusalData?["state_root"]?.stringValue
+        if interrupted { applyEvidence(error) }
+        return interrupted
+    }
+
+    private mutating func applyEvidence(_ error: ToolError) {
         message = error.message
         reason = error.stateRecoveryReason?.rawValue ?? error.refusalCode
         root = error.refusalData?["state_root"]?.stringValue ?? root

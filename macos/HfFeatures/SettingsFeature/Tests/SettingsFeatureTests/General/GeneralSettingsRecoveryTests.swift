@@ -23,10 +23,13 @@ import Testing
         var openWindowOnStart = true
         var notifyOnFinish = true
         var notifyOnNeedsYou = true
+        var appAppearance = AppAppearance.system
 
         func openWindowOnStartPublisher() -> AnyPublisher<Bool, Never> { Just(openWindowOnStart).eraseToAnyPublisher() }
         func notifyOnFinishPublisher() -> AnyPublisher<Bool, Never> { Just(notifyOnFinish).eraseToAnyPublisher() }
         func notifyOnNeedsYouPublisher() -> AnyPublisher<Bool, Never> { Just(notifyOnNeedsYou).eraseToAnyPublisher() }
+        func appAppearancePublisher() -> AnyPublisher<AppAppearance, Never> { Just(appAppearance).eraseToAnyPublisher() }
+        func setAppAppearance(_ value: AppAppearance) { appAppearance = value }
         func setOpenWindowOnStart(_: Bool) {}
         func setNotifyOnFinish(_: Bool) {}
         func setNotifyOnNeedsYou(_: Bool) {}
@@ -121,7 +124,7 @@ import Testing
         #expect(sut.recoveryPresentation.requestTitle == nil)
     }
 
-    @Test func givenCompletedReceipt_whenRevealIsTapped_thenRevealRoutesTheReceipt() async {
+    @Test func givenCompletedReceipt_whenRevealIsTapped_thenRevealIsNotOffered() async {
         let useCase = RecoveryUseCase()
         let routing = MockStoreRecoveryRouting()
         var revealed: StateRecoveryResult?
@@ -134,9 +137,10 @@ import Testing
         await waitUntil { if case .completed = sut.recoveryState { true } else { false } }
 
         #expect(sut.recoveryPresentation.canReveal)
+        #expect(!sut.recoveryPresentation.offersReveal)
         sut.didTapRevealBackup()
 
-        #expect(revealed == RecoveryUseCase.receipt())
+        #expect(revealed == nil)
     }
 
     @Test func givenRecoveryFailureWithPartialBackup_whenPublished_thenInspectionEvidenceRemainsVisible() async {
@@ -155,7 +159,7 @@ import Testing
         #expect(sut.recoveryPresentation.operationID == inspection.recovery?.operationID)
     }
 
-    @Test func givenRetainedReceipt_whenRecoveryStateChanges_thenRevealStillUsesTheCompletedReceipt() async {
+    @Test func givenRetainedReceipt_whenRecoveryStateChanges_thenRevealIsNotOffered() async {
         let useCase = RecoveryUseCase()
         let routing = MockStoreRecoveryRouting()
         var revealed: StateRecoveryResult?
@@ -172,6 +176,32 @@ import Testing
 
         sut.didTapRevealBackup()
 
-        #expect(revealed == receipt)
+        #expect(sut.recoveryPresentation.canReveal)
+        #expect(!sut.recoveryPresentation.offersReveal)
+        #expect(revealed == nil)
+    }
+
+    @Test func givenInterruptedInspection_whenRuntimeLeavesAndReturnsReady_thenTheRowWaitsThenReturns() async {
+        let useCase = RecoveryUseCase()
+        let sut = GeneralSettingsVM(useCase: useCase)
+        sut.didAppear()
+        useCase.publish(.inspected(RecoveryUseCase.inspection()))
+        await waitUntil { sut.recoveryPresentation.title == "Recovery was interrupted" }
+
+        useCase.setupSubject.send(.checking)
+        await waitUntil { sut.recoveryPresentation.title == "Task store" }
+
+        let waiting = sut.recoveryPresentation
+        #expect(!waiting.inspectEnabled)
+        #expect(waiting.rows.isEmpty)
+        #expect(!waiting.showsInterruptedNote)
+
+        useCase.setupSubject.send(.ready)
+        await waitUntil { sut.recoveryPresentation.title == "Recovery was interrupted" }
+
+        let restored = sut.recoveryPresentation
+        #expect(restored.inspectEnabled)
+        #expect(restored.showsInterruptedNote)
+        #expect(!restored.rows.isEmpty)
     }
 }

@@ -22,9 +22,11 @@ import Testing
         given(settings).openWindowOnStart.willReturn(false)
         given(settings).notifyOnFinish.willReturn(false)
         given(settings).notifyOnNeedsYou.willReturn(false)
+        given(settings).appAppearance.willReturn(.dark)
         let sut = makeSUT(settings: settings)
 
         // then
+        #expect(sut.appAppearance == .dark)
         #expect(sut.openWindowOnStart == false)
         #expect(sut.notifyOnFinish == false)
         #expect(sut.notifyOnNeedsYou == false)
@@ -36,14 +38,17 @@ import Testing
         given(settings).setOpenWindowOnStart(.any).willReturn()
         given(settings).setNotifyOnFinish(.any).willReturn()
         given(settings).setNotifyOnNeedsYou(.any).willReturn()
+        given(settings).setAppAppearance(.any).willReturn()
         let sut = makeSUT(settings: settings)
 
         // when
         sut.setOpenWindowOnStart(false)
         sut.setNotifyOnFinish(false)
         sut.setNotifyOnNeedsYou(false)
+        sut.setAppAppearance(.light)
 
         // then
+        verify(settings).setAppAppearance(.value(.light)).called(1)
         verify(settings).setOpenWindowOnStart(.value(false)).called(1)
         verify(settings).setNotifyOnFinish(.value(false)).called(1)
         verify(settings).setNotifyOnNeedsYou(.value(false)).called(1)

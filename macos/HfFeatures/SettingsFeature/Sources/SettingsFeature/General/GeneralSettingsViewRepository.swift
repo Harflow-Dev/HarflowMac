@@ -41,6 +41,7 @@ final class GeneralSettingsViewRepository: GeneralSettingsUseCase, RuntimeSetupO
     var openWindowOnStart: Bool { settingsRepository.openWindowOnStart }
     var notifyOnFinish: Bool { settingsRepository.notifyOnFinish }
     var notifyOnNeedsYou: Bool { settingsRepository.notifyOnNeedsYou }
+    var appAppearance: AppAppearance { settingsRepository.appAppearance }
     
     // MARK: - GeneralSettingsUseCase Methods
     
@@ -65,8 +66,10 @@ final class GeneralSettingsViewRepository: GeneralSettingsUseCase, RuntimeSetupO
     func openWindowOnStartPublisher() -> AnyPublisher<Bool, Never> { settingsRepository.openWindowOnStartPublisher() }
     func notifyOnFinishPublisher() -> AnyPublisher<Bool, Never> { settingsRepository.notifyOnFinishPublisher() }
     func notifyOnNeedsYouPublisher() -> AnyPublisher<Bool, Never> { settingsRepository.notifyOnNeedsYouPublisher() }
+    func appAppearancePublisher() -> AnyPublisher<AppAppearance, Never> { settingsRepository.appAppearancePublisher() }
     
     func setOpenWindowOnStart(_ value: Bool) { settingsRepository.setOpenWindowOnStart(value) }
     func setNotifyOnFinish(_ value: Bool) { settingsRepository.setNotifyOnFinish(value) }
     func setNotifyOnNeedsYou(_ value: Bool) { settingsRepository.setNotifyOnNeedsYou(value) }
+    func setAppAppearance(_ value: AppAppearance) { settingsRepository.setAppAppearance(value) }
 }

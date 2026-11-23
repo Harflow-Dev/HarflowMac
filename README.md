@@ -58,7 +58,7 @@ The title bar shows Harflow's engine connection status. Choose Light, Dark, or S
 
 After an install or update, its success notice appears in the menu bar popover. The notice ends when the app quits, and reopening with an up-to-date engine does not show it again. Runtime readiness and Settings setup controls remain available.
 
-Store incompatibility retains the qualified runtime and shows a sidebar attention entry. Settings → General offers read-only inspection of the task store and its status. The backup, reset and resume actions are hidden until the task store is redesigned; the engine's own recovery command is unchanged. A backup receipt returned by an earlier recovery remains available for Finder reveal. See the [managed runtime guide](docs/managed-runtime.md#store-readiness-and-recovery).
+Store incompatibility retains the qualified runtime and shows a sidebar attention entry. Settings → General offers read-only inspection of the task store and its status. The backup, reset and resume actions are hidden until the task store is redesigned; the engine's own recovery command is unchanged. Show backup in Finder is hidden with them. Settings → General lists Appearance (System, Light or Dark, shared with the sidebar footer), Behaviour, Harflow runtime and Task store, in that order; the Task store row waits until the runtime is ready. See the [managed runtime guide](docs/managed-runtime.md#store-readiness-and-recovery).
 
 See [managed runtime](docs/managed-runtime.md) for acquisition, storage, retry, and current distribution limits.
 

@@ -2,8 +2,7 @@
 
 Root AGENTS.md applies (`../../AGENTS.md`).
 
-The Settings scene is built through `SettingsCoordinator`. General shows managed-runtime
-status, store recovery and behaviour toggles. There is no tool-directory control or setting. The Harnesses tab exposes explicit MCP registration actions only after managed readiness gates its setup client.
+The Settings scene is built through `SettingsCoordinator`. General shows, in order, an Appearance theme control (System, Light, Dark; shares `SettingsRepository.appAppearance` with the sidebar footer), the behaviour toggles, the Harflow runtime row and the Task store row (`GeneralSettingsGroup`). Backup, reset, resume and Show backup in Finder stay hidden (`StoreRecoveryPresentation.recoveryActionsAvailable`). There is no tool-directory control or setting. The Harnesses tab exposes explicit MCP registration actions only after managed readiness gates its setup client.
 
 - Swift 6 language mode (tools 6.2 default).
 - Depends on `HfUtilities`, `HfCommon`, `HfUI`, `MonitorCore`, `HfRepository`.
