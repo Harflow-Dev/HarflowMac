@@ -16,3 +16,5 @@ The Settings scene is built through `SettingsCoordinator`. General shows, in ord
   (unconditional) on the test target.
 - Tests use Swift Testing (`givenX_whenY_thenZ`, `// given / when / then`), Mockable-generated
   `Mock*` types, and `waitUntil` from `HfTestUtilities`.
+
+The Task store row shows a refusal's engine sentence (`ToolError.displayMessage`) without its code. The refusal code appears only as a "Code" detail row, and only when the refusal carries no engine reason or the inspection itself failed; the reason, title and state root come from `HfRepository.StoreAttention`.

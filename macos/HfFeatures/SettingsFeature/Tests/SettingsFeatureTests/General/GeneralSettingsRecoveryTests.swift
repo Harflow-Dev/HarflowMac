@@ -154,8 +154,9 @@ import Testing
         useCase.publish(.failed(error, inspection: inspection))
         await waitUntil { if case .failed = sut.recoveryState { true } else { false } }
 
-        #expect(sut.recoveryPresentation.message == "Backup completed but reset failed. (state_recovery_failed)")
+        #expect(sut.recoveryPresentation.message == "Backup completed but reset failed.")
         #expect(sut.recoveryPresentation.backupPath == "/tmp/harflow-backup")
+        #expect(sut.recoveryPresentation.code == "state_recovery_failed")
         #expect(sut.recoveryPresentation.operationID == inspection.recovery?.operationID)
     }
 

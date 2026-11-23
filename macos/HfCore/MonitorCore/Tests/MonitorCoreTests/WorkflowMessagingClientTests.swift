@@ -45,7 +45,7 @@ struct WorkflowMessagingClientTests {
         // given
         let error = ToolError.unsupportedCommand(tool: "harflow-ctl", command: "send", detail: "Missing capability messaging.v1")
         // when / then
-        #expect(error.message == "The installed `harflow-ctl` does not support capability `messaging.v1`, required for `send`. "
+        #expect(error.message == "The installed harflow-ctl does not support capability messaging.v1, required for send. "
             + "Use a compatible managed Harflow runtime.")
     }
 
@@ -54,7 +54,7 @@ struct WorkflowMessagingClientTests {
         // given
         let error = ToolError.unsupportedCommand(tool: "harflow-ctl", command: "send", detail: detail)
         // when / then
-        #expect(error.message == "The installed `harflow-ctl` has no `send` command — it predates this app. "
+        #expect(error.message == "The installed harflow-ctl has no send command — it predates this app. "
             + "Use a compatible managed Harflow runtime.")
     }
 

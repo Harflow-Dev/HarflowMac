@@ -293,7 +293,7 @@ struct ToolErrorMessageCharacterizationTests {
         // given
         let error = ToolError.timedOut(tool: "harflow-ctl", seconds: 8)
         // when / then
-        #expect(error.message == "`harflow-ctl` did not answer within 8 s.")
+        #expect(error.message == "harflow-ctl did not answer within 8 s.")
     }
 
     @Test
@@ -301,7 +301,49 @@ struct ToolErrorMessageCharacterizationTests {
         // given
         let error = ToolError.launchFailed(tool: "harflow-ctl", detail: "no such file")
         // when / then
-        #expect(error.message == "Could not run `harflow-ctl`: no such file")
+        #expect(error.message == "Could not run harflow-ctl: no such file")
+    }
+
+    @Test
+    func givenANotFoundError_whenReadingItsMessage_thenItNamesTheToolWithoutCodeFormatting() {
+        // given
+        let error = ToolError.notFound(tool: "harflow-ctl", searched: ["/a", "/b"])
+        // when / then
+        #expect(error.message == "harflow-ctl was not found (searched /a, /b). "
+            + "The managed Harflow runtime is unavailable; runtime integration is required.")
+    }
+
+    @Test(arguments: [("", "harflow-ctl exited 1 without a JSON answer."), ("boom\n", "harflow-ctl exited 1 without a JSON answer: boom")])
+    func givenAnUnreadableError_whenReadingItsMessage_thenItNamesTheToolWithoutCodeFormatting(stderr: String, expected: String) {
+        // given
+        let error = ToolError.unreadable(tool: "harflow-ctl", exitCode: 1, stderr: stderr)
+        // when / then
+        #expect(error.message == expected)
+    }
+
+    @Test
+    func givenEveryToolError_whenReadingItsMessage_thenNoCaseContainsABacktick() {
+        // given
+        let errors: [ToolError] = [
+            .notFound(tool: "harflow-ctl", searched: ["/a"]),
+            .unsupportedVersion(tool: "harflow-ctl", version: "2"),
+            .unsupportedCommand(tool: "harflow-ctl", command: "send", detail: "invalid choice"),
+            .unsupportedCommand(tool: "harflow-ctl", command: "send", detail: "Missing capability messaging.v1"),
+            .unsupportedCommand(tool: "harflow-ctl", command: "conversation-prepare", detail: "Missing capability conversation-delivery.v1"),
+            .unsupportedCommand(tool: "harflow-ctl", command: "x", detail: "Missing capability \(CtlCapability.workflowAttentionCheckpoints)"),
+            .unreadable(tool: "harflow-ctl", exitCode: 1, stderr: ""),
+            .refused(code: "x", message: "m"),
+            .structuredRefusal(code: "x", message: "m", data: [:]),
+            .unknownOutcome(message: ""),
+            .launchFailed(tool: "harflow-ctl", detail: "d"),
+            .timedOut(tool: "harflow-ctl task-list-page", seconds: 30)
+        ]
+        // when / then
+        for error in errors {
+            #expect(!error.message.contains("`"))
+        }
+        #expect(ToolError.timedOut(tool: "harflow-ctl task-list-page", seconds: 30).message
+            == "harflow-ctl task-list-page did not answer within 30 s.")
     }
 
     @Test

@@ -274,7 +274,7 @@ public enum ToolError: Error, Equatable, Sendable {
     public var message: String {
         switch self {
         case .notFound(let tool, let searched):
-            return "`\(tool)` was not found (searched \(searched.joined(separator: ", "))). "
+            return "\(tool) was not found (searched \(searched.joined(separator: ", "))). "
                 + "The managed Harflow runtime is unavailable; runtime integration is required."
         case .unsupportedVersion(let tool, let version):
             let understood = Self.understoodVersions(forTool: tool)
@@ -285,16 +285,16 @@ public enum ToolError: Error, Equatable, Sendable {
             return Self.unsupportedCommandMessage(tool: tool, command: command, detail: detail)
         case .unreadable(let tool, let exitCode, let stderr):
             let detail = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-            return "`\(tool)` exited \(exitCode) without a JSON answer"
+            return "\(tool) exited \(exitCode) without a JSON answer"
                 + (detail.isEmpty ? "." : ": \(detail.suffix(400))")
         case .refused(let code, let message), .structuredRefusal(let code, let message, _):
             return TakeoverRefusal.explanation(code: code, message: message)
         case .unknownOutcome(let message):
             return message.isEmpty ? "No answer from harflow; check the task list." : message
         case .launchFailed(let tool, let detail):
-            return "Could not run `\(tool)`: \(detail)"
+            return "Could not run \(tool): \(detail)"
         case .timedOut(let tool, let seconds):
-            return "`\(tool)` did not answer within \(Int(seconds)) s."
+            return "\(tool) did not answer within \(Int(seconds)) s."
         }
     }
 

@@ -57,6 +57,8 @@ struct StoreRecoveryPresentation: Equatable {
     var message: String? = StoreRecoveryPresentation.waitingMessage
     var root: String?
     var reason: String?
+    /// The refusal code, kept on a detail line only when the engine gave no reason.
+    var code: String?
     var backupPath: String?
     var phase: String?
     var operationID: String?
@@ -83,6 +85,7 @@ struct StoreRecoveryPresentation: Equatable {
         [
             root.map { Row(label: "State root", value: $0) },
             reason.map { Row(label: "Reason", value: $0) },
+            code.map { Row(label: "Code", value: $0) },
             backupPath.map { Row(label: "Backup path", value: $0) },
             operationID.map { Row(label: "Recovery operation", value: $0) },
             phase.map { Row(label: "Phase", value: $0) }
@@ -141,10 +144,11 @@ struct StoreRecoveryPresentation: Equatable {
                 self.glyph = .attention
                 applyEvidence(error)
             } else {
-                // The inspection itself failed: the failure message only.
+                // The inspection itself failed: the failure message, and for a refusal the code on one detail line.
                 self.title = "Task store needs attention"
                 self.glyph = .attention
-                self.message = error.message
+                self.message = error.displayMessage
+                self.code = error.refusalCode
             }
         }
         if !runtimeReady {
@@ -192,24 +196,21 @@ struct StoreRecoveryPresentation: Equatable {
 
     /// Applies a store refusal; returns whether it reports an interrupted recovery.
     private mutating func applyRefusal(_ error: ToolError) -> Bool {
-        let code = error.stateRecoveryReason?.rawValue ?? error.refusalCode
-        let interrupted = code == "recovery_interrupted"
-        title = switch code {
-        case "recovery_interrupted": "Recovery was interrupted"
-        case "missing_root": "Task store has not been created"
-        default: "Task store needs attention"
-        }
+        let attention = StoreAttention(error: error)
+        title = attention.title
         glyph = .attention
-        message = error.message
-        reason = code
-        root = error.refusalData?["state_root"]?.stringValue
-        if interrupted { applyEvidence(error) }
-        return interrupted
+        message = attention.message
+        reason = attention.reason
+        code = attention.code
+        root = attention.stateRoot
+        if attention.isInterrupted { applyEvidence(error) }
+        return attention.isInterrupted
     }
 
     private mutating func applyEvidence(_ error: ToolError) {
-        message = error.message
-        reason = error.stateRecoveryReason?.rawValue ?? error.refusalCode
+        message = error.displayMessage
+        reason = error.stateRecoveryReason?.rawValue ?? reason
+        if error.stateRecoveryReason == nil { code = error.refusalCode }
         root = error.refusalData?["state_root"]?.stringValue ?? root
         backupPath = error.refusalData?["backup_path"]?.stringValue ?? backupPath
         phase = error.refusalData?["phase"]?.stringValue ?? phase

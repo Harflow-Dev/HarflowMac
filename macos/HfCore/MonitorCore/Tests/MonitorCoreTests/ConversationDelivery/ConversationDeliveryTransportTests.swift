@@ -234,7 +234,7 @@ struct ConversationDeliveryTransportTests {
         }
         #expect(command == "conversation-prepare")
         #expect(detail == "Missing capability conversation-delivery.v1")
-        #expect(error.message.contains("does not support capability `conversation-delivery.v1`"))
+        #expect(error.message.contains("does not support capability conversation-delivery.v1"))
         #expect(!error.message.contains("predates this app"))
         #expect(runner.commandCalls.isEmpty)
     }
@@ -245,7 +245,7 @@ struct ConversationDeliveryTransportTests {
         let messaging = ToolError.unsupportedCommand(tool: "harflow-ctl", command: "send", detail: "Missing capability messaging.v1")
         // when / then
         #expect(generic.message.contains("predates this app"))
-        #expect(messaging.message.contains("`messaging.v1`"))
+        #expect(messaging.message.contains("capability messaging.v1"))
         #expect(!messaging.message.contains("conversation-delivery.v1"))
     }
 

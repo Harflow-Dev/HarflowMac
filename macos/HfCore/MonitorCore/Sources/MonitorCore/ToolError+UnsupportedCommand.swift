@@ -4,17 +4,17 @@ extension ToolError {
     /// Only the exact locally generated capability refusal changes the existing usage-error copy.
     static func unsupportedCommandMessage(tool: String, command: String, detail: String) -> String {
         if detail == "Missing capability \(CtlCapability.workflowAttentionCheckpoints)" {
-            return "The installed `\(tool)` cannot safely continue this workflow checkpoint. Use a compatible managed Harflow runtime."
+            return "The installed \(tool) cannot safely continue this workflow checkpoint. Use a compatible managed Harflow runtime."
         }
         if detail == "Missing capability messaging.v1" {
-            return "The installed `\(tool)` does not support capability `messaging.v1`, required for `\(command)`. "
+            return "The installed \(tool) does not support capability messaging.v1, required for \(command). "
                 + "Use a compatible managed Harflow runtime."
         }
         if detail == "Missing capability \(CtlCapability.conversationDelivery)" {
-            return "The installed `\(tool)` does not support capability `\(CtlCapability.conversationDelivery)`, required for `\(command)`. "
+            return "The installed \(tool) does not support capability \(CtlCapability.conversationDelivery), required for \(command). "
                 + "Use a compatible managed Harflow runtime."
         }
-        return "The installed `\(tool)` has no `\(command)` command — it predates this app. "
+        return "The installed \(tool) has no \(command) command — it predates this app. "
             + "Use a compatible managed Harflow runtime."
     }
 }

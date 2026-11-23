@@ -237,7 +237,7 @@ import Testing
 
     // MARK: - Failures and completion
 
-    @Test func givenInspectionFailure_whenPresenting_thenTheFailureMessageShowsWithNoRows() {
+    @Test func givenInspectionFailureThatIsARefusal_whenPresenting_thenTheEngineMessageAndOnlyTheCodeRowShow() {
         // given
         let error = ToolError.structuredRefusal(code: "state_incompatible", message: "Inspect failed.", data: [
             "reason": .string("recovery_interrupted"), "state_root": .string("/tmp/harflow-state"), "phase": .string("copying")
@@ -249,10 +249,53 @@ import Testing
         // then
         #expect(sut.title == "Task store needs attention")
         #expect(sut.glyph == .attention)
-        #expect(sut.message == "Inspect failed. (state_incompatible)")
-        #expect(sut.rows.isEmpty)
+        #expect(sut.message == "Inspect failed.")
+        #expect(sut.rows == [.init(label: "Code", value: "state_incompatible")])
         #expect(!sut.showsInterruptedNote)
         #expect(sut.canInspect)
+    }
+
+    @Test func givenInspectionFailureThatIsNotARefusal_whenPresenting_thenTheToolMessageShowsWithNoRows() {
+        // given
+        let error = ToolError.timedOut(tool: "harflow-ctl", seconds: 30)
+
+        // when
+        let sut = StoreRecoveryPresentation(state: .failed(error, inspection: nil))
+
+        // then
+        #expect(sut.message == "harflow-ctl did not answer within 30 s.")
+        #expect(sut.rows.isEmpty)
+    }
+
+    @Test func givenRefusalWithAReason_whenPresenting_thenTheMessageHasNoCodeAndThereIsNoCodeRow() {
+        // given
+        let error = ToolError.structuredRefusal(code: "state_incompatible", message: "Unsupported state root: foreign store marker", data: [
+            "reason": .string("foreign_store"), "state_root": .string("/tmp/harflow-state")
+        ])
+
+        // when
+        let sut = StoreRecoveryPresentation(state: .incompatible(error))
+
+        // then
+        #expect(sut.title == "Task store needs attention")
+        #expect(sut.message == "Unsupported state root: foreign store marker")
+        #expect(labels(sut) == ["State root", "Reason"])
+        #expect(sut.rows.last?.value == "foreign_store")
+    }
+
+    @Test func givenRefusalWithoutAReason_whenPresenting_thenTheCodeRowReplacesTheReasonRow() {
+        // given
+        let error = ToolError.structuredRefusal(code: "state_incompatible", message: "Store refused.", data: [
+            "state_root": .string("/tmp/harflow-state")
+        ])
+
+        // when
+        let sut = StoreRecoveryPresentation(state: .incompatible(error))
+
+        // then
+        #expect(sut.title == "Task store needs attention")
+        #expect(sut.message == "Store refused.")
+        #expect(sut.rows == [.init(label: "State root", value: "/tmp/harflow-state"), .init(label: "Code", value: "state_incompatible")])
     }
 
     @Test func givenCompletedRecovery_whenPresenting_thenNoNoteShowsAndRevealIsNotOffered() {
