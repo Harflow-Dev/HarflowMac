@@ -354,16 +354,10 @@ public enum HfRadius {
         public static let newSessionDisclosureAngle: Double = 90
         /// Settings (§6.7): the content column's maximum width, centred near the top.
         public static let settingsContentMaxWidth: CGFloat = 560
-        /// Retained width of the MCP allowlist sheet.
-        public static let mcpAllowlistSheetWidth: CGFloat = 590
-        /// Retained native Settings scene width and allowlist scroll-area minimum.
+        /// Retained native Settings scene width.
         public static let settingsSceneWidth: CGFloat = 620
         /// Retained height of the native Settings scene.
         public static let settingsSceneHeight: CGFloat = 460
-        /// Retained minimum height of the allowlist scrolling area.
-        public static let mcpAllowlistMinimumHeight: CGFloat = 150
-        /// Retained maximum height of the allowlist scrolling area.
-        public static let mcpAllowlistMaximumHeight: CGFloat = 260
         /// Menu bar: the status item's item gap, the header's compact icon targets and the
         /// running row's second-line inset under its 16 pt status glyph.
         public static let menuBarItemSpacing: CGFloat = 3

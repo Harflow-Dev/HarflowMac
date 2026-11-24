@@ -47,6 +47,8 @@ struct HarnessRowView: View {
     let onInstall: () -> Void
     let onRemove: () -> Void
     var onAllowlist: () -> Void = {}
+    /// The row's MCP approvals panel is open under it.
+    var isAllowlistExpanded = false
     /// The row's last failed action; replaces the row's actions with Retry.
     var failure: HarnessRowFailure?
     var onRetry: () -> Void = {}
@@ -77,7 +79,16 @@ struct HarnessRowView: View {
             if failure != nil {
                 Button("Retry", action: onRetry).disabled(isAnyWorking)
             } else {
-                Button("MCP approvals", action: onAllowlist).disabled(isAnyWorking)
+                Button(action: onAllowlist) {
+                    HStack(spacing: HfRadius.Metrics.spacing4) {
+                        Text("MCP approvals")
+                        Image(systemName: isAllowlistExpanded ? "chevron.down" : "chevron.right")
+                            .font(.hf(.caption))
+                            .accessibilityHidden(true)
+                    }
+                }
+                .accessibilityValue(isAllowlistExpanded ? "Expanded" : "Collapsed")
+                .disabled(isAnyWorking)
                 Button(HarnessRowActions.installTitle(row: row), action: onInstall)
                     .disabled(HarnessRowActions.isInstallDisabled(row: row, isAnyWorking: isAnyWorking))
                 Button("Remove", action: onRemove)

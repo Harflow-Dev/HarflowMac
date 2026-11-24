@@ -58,7 +58,7 @@ public final class SettingsCoordinator: SettingsNavigationCoordinator {
         let vm = HarnessesVM(useCase: useCase, routing: self)
         return HarnessesView(vm) { row in
             let allowlist = MCPAllowlistVM(backend: MCPAllowlistVM.backend(for: row.key), title: row.displayName, useCase: MCPAllowlistRepository())
-            return MCPAllowlistView(viewModel: allowlist).eraseToAnyView()
+            return MCPApprovalsPanel(viewModel: allowlist).eraseToAnyView()
         }.eraseToAnyView()
     }
     

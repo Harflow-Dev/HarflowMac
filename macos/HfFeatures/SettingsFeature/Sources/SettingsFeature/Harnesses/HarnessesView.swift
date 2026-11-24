@@ -54,7 +54,7 @@ struct HarnessesView<VM: HarnessesViewModel>: View {
     // MARK: - State
     
     @State var viewModel: VM
-    @State private var allowlistRow: HarnessRow?
+    @State private var expandedAllowlistKey: String?
     private let buildAllowlist: (HarnessRow) -> AnyView
     
     // MARK: - Init
@@ -98,10 +98,14 @@ struct HarnessesView<VM: HarnessesViewModel>: View {
                             isAnyWorking: viewModel.workingKey != nil,
                             onInstall: { viewModel.didTapInstall(row) },
                             onRemove: { viewModel.didTapRemove(row) },
-                            onAllowlist: { allowlistRow = row },
+                            onAllowlist: { expandedAllowlistKey = expandedAllowlistKey == row.key ? nil : row.key },
+                            isAllowlistExpanded: expandedAllowlistKey == row.key,
                             failure: viewModel.rowFailures[row.key],
                             onRetry: { viewModel.didTapRetry(row) }
                         )
+                        if expandedAllowlistKey == row.key {
+                            InlineAllowlistPanel(row: row, build: buildAllowlist)
+                        }
                     }
                     Section("Harness qualification") {
                         ForEach(viewModel.qualificationCards) { card in
@@ -118,8 +122,14 @@ struct HarnessesView<VM: HarnessesViewModel>: View {
             }
         }
         .padding(HfRadius.Metrics.spacing16)
-        .sheet(item: $allowlistRow) { row in
-            buildAllowlist(row)
+        .onChange(of: viewModel.rows.map(\.key)) { _, keys in
+            if let key = expandedAllowlistKey, !keys.contains(key) { expandedAllowlistKey = nil }
+        }
+        .onChange(of: viewModel.showsRuntimeSetup) { _, showing in
+            if showing { expandedAllowlistKey = nil }
+        }
+        .onChange(of: Set(viewModel.rowFailures.keys)) { _, failed in
+            if let key = expandedAllowlistKey, failed.contains(key) { expandedAllowlistKey = nil }
         }
         .onAppear { viewModel.didAppear() }
         .onDisappear { viewModel.didDisappear() }
@@ -152,6 +162,27 @@ extension HarnessesView {
                     .foregroundStyle(Color.secondaryText)
             }
         }
+    }
+}
+
+// MARK: - InlineAllowlistPanel
+
+/// The panel under its harness row. It builds the panel once per appearance, so a change to the rows above never
+/// replaces the panel's view model or the focus in its field.
+private struct InlineAllowlistPanel: View {
+    let row: HarnessRow
+    let build: (HarnessRow) -> AnyView
+    @State private var panel: AnyView?
+
+    var body: some View {
+        Group {
+            if let panel {
+                panel
+            } else {
+                Color.clear.frame(height: 0).onAppear { panel = build(row) }
+            }
+        }
+        .padding(.leading, HfRadius.Metrics.spacing20)
     }
 }
 

@@ -39,6 +39,12 @@ final class MCPAllowlistVM: MCPAllowlistViewModel {
     private(set) var supported = false
     private(set) var isBusy = false
     private(set) var errorMessage: String?
+    /// The refusal code of the last failed read or change, shown on a "Code" line under the message.
+    private(set) var errorCode: String?
+    /// The one-sentence missing-feature form, shown when the runtime has no `mcp-allowlist` command.
+    private(set) var missingFeatureSentence: String?
+    /// A read or a change has returned a document since the panel opened or the last failed read.
+    private(set) var hasAnswer = false
     @ObservationIgnored private let useCase: any MCPAllowlistUseCase
 
     init(backend: String, title: String, useCase: any MCPAllowlistUseCase) {
@@ -63,8 +69,18 @@ final class MCPAllowlistVM: MCPAllowlistViewModel {
             : "Use server/* to approve every tool on one server."
     }
 
+    /// The runtime answered and this harness has no global approvals.
+    var showsEmpty: Bool { hasAnswer && supported && entries.isEmpty }
+
+    /// The entry field is usable once a read has succeeded for a harness whose approvals Harflow edits. It stays
+    /// enabled while a request runs, so its focus survives a write.
+    var fieldEnabled: Bool { hasAnswer && supported }
+
+    /// Add, Remove and the other changes: the field's condition and nothing running.
+    var actionsEnabled: Bool { fieldEnabled && !isBusy }
+
     var canAdd: Bool {
-        supported && !isBusy && Self.validEntry(entry.trimmingCharacters(in: .whitespacesAndNewlines))
+        hasAnswer && supported && !isBusy && Self.validEntry(entry.trimmingCharacters(in: .whitespacesAndNewlines))
             && (backend != "vibe" || !entry.contains("*"))
     }
 
@@ -83,7 +99,7 @@ final class MCPAllowlistVM: MCPAllowlistViewModel {
     }
 
     func confirmRemove(_ value: String) {
-        guard supported, !isBusy, entries.contains(value) else { return }
+        guard hasAnswer, supported, !isBusy, entries.contains(value) else { return }
         publishDialog("Remove global approval for \(value)?", description: "This removes the explicit approval from \(title)'s global configuration. "
                 + "Other permission rules remain unchanged.") {
             AlertAction(title: "Remove approval") { [weak self] in
@@ -98,14 +114,49 @@ final class MCPAllowlistVM: MCPAllowlistViewModel {
         defer { isBusy = false }
         do {
             let result = try await useCase.request(backend: backend, allow: allow, remove: remove)
-            supported = result["supported"]?.boolValue == true
-            entries = Array(Set(result["entries"]?.arrayValue?.compactMap(\.stringValue) ?? [])).sorted()
-            configPath = result["config_path"]?.stringValue ?? ""
-            detail = result["detail"]?.stringValue ?? ""
-            errorMessage = nil
+            guard !Task.isCancelled else { return }
+            apply(result)
             if allow != nil { entry = "" }
         } catch {
-            errorMessage = (error as? ToolError)?.message ?? error.localizedDescription
+            guard !Task.isCancelled else { return }
+            fail(error, isRead: allow == nil && remove == nil)
         }
+    }
+
+    private func apply(_ result: [String: JSONValue]) {
+        update(\.supported, result["supported"]?.boolValue == true)
+        update(\.entries, Array(Set(result["entries"]?.arrayValue?.compactMap(\.stringValue) ?? [])).sorted())
+        update(\.configPath, result["config_path"]?.stringValue ?? "")
+        update(\.detail, result["detail"]?.stringValue ?? "")
+        update(\.hasAnswer, true)
+        showFailure(message: nil, code: nil, sentence: nil)
+    }
+
+    /// A failed read leaves no answer: the list, path and detail clear and the field is disabled. A failed change
+    /// keeps what the last answer showed, and the typed entry, so the person can reload and try again.
+    private func fail(_ error: Error, isRead: Bool) {
+        let toolError = error as? ToolError
+        if isRead {
+            update(\.supported, false)
+            update(\.entries, [])
+            update(\.configPath, "")
+            update(\.detail, "")
+            update(\.hasAnswer, false)
+        }
+        if case .unsupportedCommand(_, "mcp-allowlist", _)? = toolError {
+            showFailure(message: nil, code: nil, sentence: MissingFeature.sentence(canDo: "edit global MCP approvals"))
+        } else {
+            showFailure(message: toolError?.displayMessage ?? error.localizedDescription, code: toolError?.detailCode, sentence: nil)
+        }
+    }
+
+    private func showFailure(message: String?, code: String?, sentence: String?) {
+        update(\.errorMessage, message)
+        update(\.errorCode, code)
+        update(\.missingFeatureSentence, sentence)
+    }
+
+    private func update<Value: Equatable>(_ keyPath: ReferenceWritableKeyPath<MCPAllowlistVM, Value>, _ value: Value) {
+        if self[keyPath: keyPath] != value { self[keyPath: keyPath] = value }
     }
 }
