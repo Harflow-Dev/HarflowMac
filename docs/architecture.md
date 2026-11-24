@@ -533,8 +533,8 @@ The approved UI reference is HarflowDesign `30b7e9d`,
 `v2/scripts/screens-approval-states.js`: task approval states, Needs you approval and
 stale checkpoint states, and menu-bar busy/stale/answered-elsewhere cards. Menu
 approval cards offer Approve once and Reject only; a caller-response capability
-missing from the selected runtime leaves the card read-only. Question Answer still
-opens the app. The 380 × 560 popover retains fixed header/footer and a scrolling body.
+missing from the selected runtime leaves the card read-only. A plain question
+card answers inline (below); Answer still opens the app for questions with offered answers and for recoveries. The 380 × 560 popover retains fixed header/footer and a scrolling body.
 
 The popover follows the runtime (HarflowDesign `8ec4d38`, `menu-bar/runtime-setup`, `-preparing`, `-failed`,
 `engine-call-failed`). `MenuBarUseCase` publishes the `RuntimeSetupState` and a separate work-availability flag; the
@@ -545,6 +545,16 @@ block (setup required, preparing, failed with the failure message; Open Harflow 
 and subline row are hidden, and no spinner is drawn. On a ready runtime, a listing error that is not a managed-runtime
 error becomes `MenuBarRefreshNote` (the sentence from `LoadingWorkError`, no refusal code) above the sections, with Retry
 refreshing the listing; the rows stay.
+
+A plain question (no offered answers) draws `MenuBarQuestionCard` (HarflowDesign `8ec4d38`, `menu-bar/question-*`). The VM keeps
+the draft per item id (kept across popover close, dropped once the item leaves the snapshot) and the card phase
+(`MenuBarQuestionState.Phase`) in `MenuBarVM+Questions.swift`; `MenuBarVM.phase(for:item:draft:)` is the pure outcome mapping.
+`NeedsYouAnswerOutcome.failed` carries the message, the refusal code (a Code line on the card) and `legacyText`, the text the main
+window has always shown; `.unknown` is the resume's timeout or no-answer outcome, classified in `NeedsYouAnswerOutcome.classify`.
+An accepted, already-answered, stale, caller-returned or approval outcome settles the card; settled and unknown cards are held
+per item id until `didPopoverClose()` even once the snapshot no longer lists the item. A failed answer keeps the field and
+offers Answer and Open in Harflow. An unknown delivery disables the field, offers Open Needs you and is never resent automatically (the card resets on popover close, and the person can send again): the use
+case sends one resume per tap and the VM ignores a submit in every phase but editing and failed.
 
 
 ## Native workflow library

@@ -201,16 +201,7 @@ enum NeedsYouPresentationMapper {
         )
     }
 
-    static func settledNote(_ item: NeedsYouItem) -> String {
-        if item.kind == .approval, item.rootRunID.isEmpty {
-            return "Harflow sent your decision to the engine, and \(item.runTitle) no longer needs you."
-        }
-        if item.ownership.sharedAnswering { return "The engine used the first answer. Ownership is unchanged." }
-        if item.ownership.callerEnded || item.ownership.handover != nil {
-            return "Harflow now owns this run. The original caller can no longer answer it, and \(item.runTitle) no longer needs you."
-        }
-        return "\(item.runTitle) no longer needs you."
-    }
+    static func settledNote(_ item: NeedsYouItem) -> String { item.settledNote }
 
     static func settledDecision(_ item: NeedsYouItem, rejected: Bool) -> String {
         switch item.kind {

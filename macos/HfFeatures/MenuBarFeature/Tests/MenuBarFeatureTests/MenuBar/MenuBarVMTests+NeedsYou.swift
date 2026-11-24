@@ -20,6 +20,12 @@ import Testing
         var contextCurrent = true
         var freshReviewSucceeded = false
         var reviewCalls = 0
+        var answers: [(NeedsYouItem, String)] = []
+        var answerOutcome: NeedsYouAnswerOutcome = .accepted
+        func answerQuestion(_ item: NeedsYouItem, text: String) async -> NeedsYouAnswerOutcome {
+            answers.append((item, text)); return answerOutcome
+        }
+
         func canReviewApprovalAgain(_: NeedsYouItem) async -> Bool { reviewCalls += 1; return freshReviewSucceeded }
         func isApprovalContextCurrent(_: NeedsYouItem) -> Bool { contextCurrent }
         func respondToApproval(_ item: NeedsYouItem, decision: String) async -> NeedsYouAnswerOutcome {

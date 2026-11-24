@@ -156,4 +156,81 @@ import Testing
         #expect(fake.calls.contains("workflowPage"))
         #expect(fake.resumes.count == 1)
     }
+
+    @Test func givenARefusalWithCode_whenClassified_thenFailedCarriesDisplayMessageAndCode() {
+        // given
+        let error = ToolError.refused(code: "session_busy", message: "Another run holds it")
+        // when
+        let outcome = NeedsYouAnswerOutcome.classify(error)
+        // then
+        #expect(outcome == .failed(message: "Another run holds it", code: "session_busy", legacyText: error.message))
+        #expect(error.message.contains("Refused: another run or takeover"))
+    }
+
+    @Test func givenAnEmptyRefusalMessage_whenClassified_thenMessageIsRefusedAndLegacyTextIsToday() {
+        // given
+        let error = ToolError.refused(code: "some_code", message: "")
+        // when
+        let outcome = NeedsYouAnswerOutcome.classify(error)
+        // then
+        #expect(outcome == .failed(message: "Refused.", code: "some_code", legacyText: "Refused (some_code)."))
+    }
+
+    @Test func givenWorkflowErrorRefusal_whenClassified_thenCodeIsNil() {
+        // given
+        let error = ToolError.refused(code: "workflow_error", message: "Something else entirely")
+        // when
+        let outcome = NeedsYouAnswerOutcome.classify(error)
+        // then
+        #expect(outcome == .failed(message: "Something else entirely", code: nil, legacyText: "Something else entirely"))
+    }
+
+    @Test func givenANonRefusalError_whenClassified_thenCodeIsNilAndTextsAreTheMessage() {
+        // given
+        let error = ToolError.launchFailed(tool: "harflow-ctl", detail: "no such file")
+        // when
+        let outcome = NeedsYouAnswerOutcome.classify(error)
+        // then
+        #expect(outcome == .failed(message: error.message, code: nil, legacyText: error.message))
+    }
+
+    @Test func givenTimedOutResume_whenAnswered_thenUnknownAndOneInvocation() async {
+        // given
+        let (sut, fake, item) = await question()
+        fake.resumeError = .timedOut(tool: "harflow-ctl", seconds: 30)
+        // when
+        let outcome = await sut.answer(item, text: "x", additionalAttempts: nil)
+        // then
+        #expect(outcome == .unknown(ToolError.timedOut(tool: "harflow-ctl", seconds: 30).message))
+        #expect(fake.resumes.count == 1)
+        #expect(sut.snapshot.items.count == 1)
+    }
+
+    @Test func givenUnknownOutcomeResume_whenAnswered_thenUnknown() async {
+        // given
+        let (sut, fake, item) = await question()
+        fake.resumeError = .unknownOutcome(message: "No answer")
+        // when
+        let outcome = await sut.answer(item, text: "x", additionalAttempts: nil)
+        // then
+        #expect(outcome == .unknown("No answer"))
+        #expect(fake.resumes.count == 1)
+    }
+
+    @Test func givenOwnershipVariants_whenSettledNote_thenTextsMatchThePreviousMapper() {
+        // given
+        func item(_ ownership: NeedsYouItem.Ownership, kind: NeedsYouItem.Kind = .question, root: String = "w1") -> NeedsYouItem {
+            var value = NeedsYouItem(id: "i", kind: kind, runTitle: "Run", text: "t", ownership: ownership, startedBy: "Original caller")
+            value.rootRunID = root
+            return value
+        }
+        // when / then
+        #expect(item(.init(owner: "caller", callerEnded: false, engineNote: "", handover: nil)).settledNote == "Run no longer needs you.")
+        #expect(item(.init(owner: "caller", callerEnded: true, engineNote: "", handover: nil)).settledNote
+            == "Harflow now owns this run. The original caller can no longer answer it, and Run no longer needs you.")
+        #expect(item(.init(owner: "caller", callerEnded: false, engineNote: "", handover: nil, sharedAnswering: true)).settledNote
+            == "The engine used the first answer. Ownership is unchanged.")
+        #expect(item(.init(owner: "caller", callerEnded: false, engineNote: "", handover: nil), kind: .approval, root: "").settledNote
+            == "Harflow sent your decision to the engine, and Run no longer needs you.")
+    }
 }

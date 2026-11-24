@@ -5,6 +5,7 @@
 
 import AppKit
 import HfCommon
+import HfRepository
 import HfUI
 import MonitorCore
 import SwiftUI
@@ -87,11 +88,19 @@ private final class MenuBarPreviewModel: MenuBarViewModel {
     func didTapNewSession() {}
     func didCaptureWindowOpener(_: @escaping () -> Void) {}
     func didTapRetryRefresh() {}
+    func didEditAnswer(_: String, text _: String) {}
+    func didSubmitAnswer(_: String) {}
 }
 
 private func needsYouRows(_ count: Int) -> [MenuBarNeedsYouSection.Row] {
-    [
-        .init(id: "a", kindLabel: "Question", title: "Release checklist", subtitle: "Ended · Original caller"),
+    var question = MenuBarNeedsYouSection.Row(id: "a", kindLabel: "Question", title: "Release checklist", subtitle: "Ended · Original caller")
+    question.item = NeedsYouItem(
+        id: "a", kind: .question, runTitle: "Release checklist", text: "Ship the release today?",
+        ownership: .init(owner: "caller", callerEnded: true, engineNote: "", handover: nil), startedBy: "Original caller"
+    )
+    question.question = MenuBarQuestionState(draft: "Yes, ship it.")
+    return [
+        question,
         .init(id: "b", kindLabel: "Approval", title: "Migrate billing exports", subtitle: "Ended · Original caller"),
         .init(id: "c", kindLabel: "Recovery", title: "Audit lockfile", subtitle: "Mac app")
     ]

@@ -20,6 +20,8 @@ struct MenuBarNeedsYouSection: Equatable, Sendable {
         var submitting = false
         var resultLines: [String] = []
         var showsRefresh = false
+        /// The inline answer card; nil for approvals, recoveries and questions with offered answers (answered in the window).
+        var question: MenuBarQuestionState?
     }
 
     static let rowLimit = 3
@@ -33,7 +35,9 @@ struct MenuBarNeedsYouSection: Equatable, Sendable {
 
     var label: String { count > 0 ? "Needs you · \(count)" : "Needs you" }
     var showAllTitle: String { "Show all \(count)" }
-    var showsShowAll: Bool { count > rows.count }
+    /// How many rows come from the snapshot. A held question card is not listed, so it never hides Show all.
+    let listedRowCount: Int
+    var showsShowAll: Bool { count > listedRowCount }
 
     /// Nil while loading, so the section stays out of the popover until the first complete pass.
     init?(_ snapshot: NeedsYouSnapshot) {
@@ -41,11 +45,13 @@ struct MenuBarNeedsYouSection: Equatable, Sendable {
         self.count = snapshot.items.count
         self.isLowerBound = snapshot.isLowerBound
         self.olderEngine = snapshot.workflowInputsUnsupported
+        self.listedRowCount = min(snapshot.items.count, Self.rowLimit)
         self.rows = snapshot.items.prefix(Self.rowLimit).map {
             var row = Row(id: $0.id, kindLabel: Self.kindLabel($0.kind), title: $0.runTitle,
                 subtitle: $0.ownership.callerEnded ? "Ended · \($0.startedBy)" : $0.startedBy)
             row.item = $0
             row.canDecide = $0.kind == .approval && $0.approvalCanRespond && $0.approvalContext != nil
+            if $0.kind == .question, $0.offeredAnswers == nil { row.question = MenuBarQuestionState() }
             return row
         }
     }
@@ -54,6 +60,7 @@ struct MenuBarNeedsYouSection: Equatable, Sendable {
         self.count = count
         self.isLowerBound = isLowerBound
         self.rows = rows
+        self.listedRowCount = rows.count
         self.olderEngine = olderEngine
     }
 
@@ -78,9 +85,12 @@ protocol MenuBarNeedsYouUseCase {
     func retainedApprovalResult(_ item: NeedsYouItem) -> ApprovalResponseOutcome?
     func canReviewApprovalAgain(_ item: NeedsYouItem) async -> Bool
     func refreshNeedsYou()
+    /// Sends a free-text answer to a plain question. Never retried by the caller.
+    func answerQuestion(_ item: NeedsYouItem, text: String) async -> NeedsYouAnswerOutcome
 }
 
 extension MenuBarNeedsYouUseCase {
+    func answerQuestion(_: NeedsYouItem, text _: String) async -> NeedsYouAnswerOutcome { .failed("Answers are unavailable.") }
     func respondToApproval(_: NeedsYouItem, decision _: String) async -> NeedsYouAnswerOutcome { .failed("Approval responses are unavailable.") }
     func isApprovalContextCurrent(_: NeedsYouItem) -> Bool { false }
     func retainedApprovalResult(_: NeedsYouItem) -> ApprovalResponseOutcome? { nil }
@@ -96,6 +106,8 @@ struct MenuBarNeedsYouSectionView: View {
     let showAll: () -> Void
     var decide: (MenuBarNeedsYouSection.Row, String) -> Void = { _, _ in }
     var refresh: () -> Void = {}
+    var edit: (String, String) -> Void = { _, _ in }
+    var submit: (String) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
@@ -104,6 +116,12 @@ struct MenuBarNeedsYouSectionView: View {
                 Text("Nothing needs you").font(.hf(.secondary)).foregroundStyle(Color.primaryText)
             }
             ForEach(section.rows) { row in
+                if let state = row.question, let item = row.item {
+                    MenuBarQuestionCard(
+                        title: row.title, text: item.text, state: state,
+                        edit: { edit(row.id, $0) }, submit: { submit(row.id) }, open: { open(row.id) }
+                    )
+                } else {
                 VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing8) {
                     HStack {
                         Text(row.kindLabel).font(.hf(.caption, weight: .semibold)).foregroundStyle(Color.warningFG)
@@ -136,6 +154,7 @@ struct MenuBarNeedsYouSectionView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.cardFill, in: RoundedRectangle(cornerRadius: HfRadius.row))
                 .overlay(RoundedRectangle(cornerRadius: HfRadius.row).stroke(Color.hairline))
+                }
             }
             if section.showsShowAll {
                 Button(section.showAllTitle, action: showAll).buttonStyle(.link).font(.hf(.secondary))
@@ -174,7 +193,7 @@ extension MenuBarVM {
 
     func updateNeedsYou(_ snapshot: NeedsYouSnapshot) {
         guard var section = MenuBarNeedsYouSection(snapshot) else { needsYou = nil; return }
-        section.rows = section.rows.map { row in
+        section.rows = applyQuestions(to: section.rows, pendingIDs: Set(snapshot.items.map(\.id))).map { row in
             var result = row
             guard let item = row.item else { return result }
             result.canDecide = result.canDecide && needsYouSource?.isApprovalContextCurrent(item) == true

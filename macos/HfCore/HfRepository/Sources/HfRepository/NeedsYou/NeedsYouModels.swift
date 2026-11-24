@@ -150,6 +150,22 @@ public struct NeedsYouItem: Equatable, Sendable, Identifiable {
     }
 }
 
+// MARK: - NeedsYouItem + settled note
+
+public extension NeedsYouItem {
+    /// The note a settled card shows once the request was answered here.
+    var settledNote: String {
+        if kind == .approval, rootRunID.isEmpty {
+            return "Harflow sent your decision to the engine, and \(runTitle) no longer needs you."
+        }
+        if ownership.sharedAnswering { return "The engine used the first answer. Ownership is unchanged." }
+        if ownership.callerEnded || ownership.handover != nil {
+            return "Harflow now owns this run. The original caller can no longer answer it, and \(runTitle) no longer needs you."
+        }
+        return "\(runTitle) no longer needs you."
+    }
+}
+
 // MARK: - NeedsYouSnapshot
 
 /// Everything the sidebar, list and menu bar render. Equality covers every field.
@@ -217,13 +233,28 @@ public enum NeedsYouAnswerOutcome: Equatable, Sendable {
     case stale(String)
     /// An approval's action, revision or owner differs from what was shown; carries the refreshed request.
     case changed(NeedsYouItem?)
-    case failed(String)
+    /// The engine refused or could not run the resume. `message` is the sentence without its refusal code, `code` the refusal
+    /// code for a detail line, and `legacyText` the full text the main window has always shown.
+    case failed(message: String, code: String?, legacyText: String)
+    /// The resume's delivery could not be confirmed (timeout or no answer). The answer is never sent again.
+    case unknown(String)
+
+    /// A failure that has only a sentence, no refusal code.
+    public static func failed(_ text: String) -> Self { .failed(message: text, code: nil, legacyText: text) }
+
+    private static func failure(_ error: ToolError) -> Self {
+        .failed(message: error.displayMessage, code: error.detailCode, legacyText: error.message)
+    }
 
     /// The note shown when a request changed under the reviewer.
     public static let changedMessage = "This request changed. Review it again."
 
     /// Classifies an engine refusal. Workflow refusals carry text only, so the text is matched here and nowhere else.
     static func classify(_ error: ToolError) -> Self {
+        switch error {
+        case .timedOut, .unknownOutcome: return .unknown(error.message)
+        default: break
+        }
         if let winner = error.workflowInteractionWinner {
             return .alreadyAnswered(answer: winner.answer, answeredBy: winner.answeredBy,
                                     answeredAt: winner.answeredAt, answerTruncated: winner.answerTruncated)
@@ -236,11 +267,11 @@ public enum NeedsYouAnswerOutcome: Equatable, Sendable {
             case .notCurrent, .alreadyAnswered, .settled, .expired, .ownershipLost:
                 return .stale(error.message)
             default:
-                return .failed(error.message)
+                return failure(error)
             }
         }
         if error.refusalCode == "attention_checkpoint_stale" { return .stale(NeedsYouAnswerOutcome.changedMessage) }
-        guard let code = error.refusalCode, code == "workflow_error" else { return .failed(error.message) }
+        guard let code = error.refusalCode, code == "workflow_error" else { return failure(error) }
         let message = rawMessage(error)
         if message.hasSuffix("; caller is alive") {
             return .callerReturned("The caller is answering this again.")

@@ -116,7 +116,7 @@ extension NeedsYouVM {
                 recordSettled(detail, for: item)
                 sendError = nil
             } else { sendError = message }
-        case .failed(let message):
+        case .failed(_, _, let message), .unknown(let message):
             sendError = message
         case .changed(let refreshed):
             if let refreshed { overrides[item.id] = refreshed }

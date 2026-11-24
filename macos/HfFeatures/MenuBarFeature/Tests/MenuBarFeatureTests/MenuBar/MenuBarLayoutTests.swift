@@ -504,4 +504,6 @@ import Testing
     func didTapNewSession() { newSessionCount += 1 }
     func didCaptureWindowOpener(_: @escaping () -> Void) {}
     func didTapRetryRefresh() { retryCount += 1 }
+    func didEditAnswer(_: String, text _: String) {}
+    func didSubmitAnswer(_: String) {}
 }

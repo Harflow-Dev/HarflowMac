@@ -55,6 +55,10 @@ protocol MenuBarViewModel: ViewModel {
     var needsYou: MenuBarNeedsYouSection? { get }
     func didDecideApproval(_ row: MenuBarNeedsYouSection.Row, decision: String)
     func didRefreshApprovals()
+    /// Records the draft typed into a question card.
+    func didEditAnswer(_ rowID: String, text: String)
+    /// Sends the draft of a question card once. Ignored when empty, in flight, unknown or settled.
+    func didSubmitAnswer(_ rowID: String)
     func didSelectNeedsYou(_ itemID: String)
     func didTapShowAllNeedsYou()
 
@@ -82,6 +86,8 @@ extension MenuBarViewModel {
     var needsYou: MenuBarNeedsYouSection? { nil }
     func didDecideApproval(_: MenuBarNeedsYouSection.Row, decision _: String) {}
     func didRefreshApprovals() {}
+    func didEditAnswer(_: String, text _: String) {}
+    func didSubmitAnswer(_: String) {}
     func didSelectNeedsYou(_: String) {}
     func didTapShowAllNeedsYou() {}
 }
@@ -270,7 +276,8 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
         if let section = viewModel.needsYou {
             MenuBarNeedsYouSectionView(
                 section: section, open: { viewModel.didSelectNeedsYou($0) }, showAll: { viewModel.didTapShowAllNeedsYou() },
-                decide: { viewModel.didDecideApproval($0, decision: $1) }, refresh: { viewModel.didRefreshApprovals() }
+                decide: { viewModel.didDecideApproval($0, decision: $1) }, refresh: { viewModel.didRefreshApprovals() },
+                edit: { viewModel.didEditAnswer($0, text: $1) }, submit: { viewModel.didSubmitAnswer($0) }
             )
         }
     }

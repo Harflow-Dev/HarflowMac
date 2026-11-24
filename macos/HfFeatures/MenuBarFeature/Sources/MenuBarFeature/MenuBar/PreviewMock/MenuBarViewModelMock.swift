@@ -105,6 +105,8 @@ final class MenuBarViewModelMock: MenuBarViewModel {
     func didTapNewSession() {}
     func didCaptureWindowOpener(_: @escaping () -> Void) {}
     func didTapRetryRefresh() {}
+    func didEditAnswer(_: String, text _: String) {}
+    func didSubmitAnswer(_: String) {}
 }
 
 #endif

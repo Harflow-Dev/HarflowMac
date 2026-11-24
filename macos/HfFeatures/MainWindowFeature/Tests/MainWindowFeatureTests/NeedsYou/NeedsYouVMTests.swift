@@ -218,6 +218,20 @@ import Testing
         #expect(rig.sut.presentation.detail?.phase == .answerable)
     }
 
+    @Test func givenUnknownOutcome_whenSent_thenTextIsKeptAndTheMessageShownAsToday() async {
+        // given
+        let rig = rig(items: [item()], outcome: .unknown("harflow-ctl did not answer within 30 s."))
+        rig.sut.didAppear()
+        rig.sut.show(itemID: "input:w1:d1")
+        await waitUntil { rig.sut.presentation.detail != nil }
+        rig.sut.answerText = "keep me"
+        // when
+        rig.sut.didSubmitAnswer()
+        await waitUntil { rig.sut.presentation.detail?.error == "harflow-ctl did not answer within 30 s." }
+        // then
+        #expect(rig.sut.answerText == "keep me")
+    }
+
     @Test func givenChangedApproval_whenDecided_thenDisplayedActionIsReadOnlyUntilRefreshed() async {
         // given
         var approval = item("approval:t1:r1", kind: .approval)

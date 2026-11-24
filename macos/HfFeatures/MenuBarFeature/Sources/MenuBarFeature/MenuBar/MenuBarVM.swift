@@ -121,6 +121,12 @@ final class MenuBarVM: MenuBarViewModel {
     var needsYou: MenuBarNeedsYouSection?
     @ObservationIgnored var approvalSubmitting: Set<String> = []
     @ObservationIgnored var approvalResults: [String: MenuBarApprovalHeldResult] = [:]
+    /// Question drafts per item id. They survive the popover closing and drop once the item leaves the snapshot.
+    @ObservationIgnored var questionDrafts: [String: String] = [:]
+    /// Per item id: the submitting, failed, unknown or settled phase. Anything but editing.
+    @ObservationIgnored var questionPhases: [String: MenuBarQuestionState.Phase] = [:]
+    /// Settled and unknown cards held until `didPopoverClose()`, even once the snapshot no longer lists the item.
+    @ObservationIgnored var heldQuestions: [String: MenuBarHeldQuestion] = [:]
 
     // MARK: - Private Properties
 
@@ -191,6 +197,7 @@ final class MenuBarVM: MenuBarViewModel {
     func didPopoverClose() {
         visibility.setMenuBarPopoverOpen(false)
         stopMinuteTick()
+        dropHeldQuestions()
     }
 
     func didDisappearStatusItem() { workflowStatus?.didDisappear() }

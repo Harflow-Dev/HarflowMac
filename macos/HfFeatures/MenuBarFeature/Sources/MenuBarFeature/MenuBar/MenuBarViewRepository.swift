@@ -39,6 +39,10 @@ final class MenuBarViewRepository: MenuBarUseCase, MenuBarCountAvailabilityUseCa
         return await approvalResponseOwner.canReviewAgain(request, context: context)
     }
 
+    func answerQuestion(_ item: NeedsYouItem, text: String) async -> NeedsYouAnswerOutcome {
+        await needsYouRepository.answer(item, text: text, additionalAttempts: nil)
+    }
+
     func refreshNeedsYou() { needsYouRepository.refresh() }
     var needsYouSnapshot: NeedsYouSnapshot { needsYouRepository.snapshot }
     func needsYouSnapshotPublisher() -> AnyPublisher<NeedsYouSnapshot, Never> { needsYouRepository.snapshotPublisher() }

@@ -43,6 +43,36 @@ import Testing
         #expect(rig.useCase.answers.first?.0 == firstItem)
     }
 
+    @Test func givenUnknownOutcome_whenFinished_thenShownAsTodaysFailure() async throws {
+        // given
+        let rig = fixture([item("only")])
+        defer { rig.vm.didDisappear() }
+        await waitUntil { rig.vm.presentation.questions.count == 1 }
+        let card = try #require(rig.vm.presentation.questions.first)
+        rig.vm.setQuestionDraft("A draft", for: card)
+        rig.useCase.answerOutcome = .unknown("harflow-ctl did not answer within 30 s.")
+        // when
+        rig.vm.submitQuestion(card, offered: nil)
+        await waitUntil { rig.vm.presentation.questions.first?.detail.error == "harflow-ctl did not answer within 30 s." }
+        // then
+        #expect(rig.vm.questionDraft(for: card) == "A draft")
+    }
+
+    @Test func givenFailureWithCode_whenFinished_thenTheLegacyTextIsShown() async throws {
+        // given
+        let rig = fixture([item("only")])
+        defer { rig.vm.didDisappear() }
+        await waitUntil { rig.vm.presentation.questions.count == 1 }
+        let card = try #require(rig.vm.presentation.questions.first)
+        rig.vm.setQuestionDraft("A draft", for: card)
+        rig.useCase.answerOutcome = .failed(message: "Busy", code: "session_busy", legacyText: "Busy (session_busy)")
+        // when
+        rig.vm.submitQuestion(card, offered: nil)
+        await waitUntil { rig.vm.presentation.questions.first?.detail.error == "Busy (session_busy)" }
+        // then
+        #expect(rig.vm.presentation.questions.first?.detail.error == "Busy (session_busy)")
+    }
+
     @Test func givenOldRenderedTarget_whenCheckpointReplaced_thenDraftAndActionCannotRetarget() async throws {
         // given
         let firstItem = item("same")

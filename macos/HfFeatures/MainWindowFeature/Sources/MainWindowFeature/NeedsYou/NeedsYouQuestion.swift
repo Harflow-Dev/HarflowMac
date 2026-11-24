@@ -155,7 +155,7 @@ extension NeedsYouVM {
             questions[index].isPending = false
             questions[index].terminal = true
             useCase.refresh()
-        case .failed(let message), .stale(let message):
+        case .failed(_, _, let message), .stale(let message), .unknown(let message):
             if stillObserved, !questions[index].absentSeen {
                 questions[index].detail.error = message
             } else {
