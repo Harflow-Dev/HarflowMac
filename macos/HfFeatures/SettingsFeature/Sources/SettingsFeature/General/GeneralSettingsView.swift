@@ -30,6 +30,9 @@ protocol GeneralSettingsViewModel: ViewModel {
     var notifyOnFinish: Bool { get }
     var notifyOnNeedsYou: Bool { get }
     var appAppearance: AppAppearance { get }
+    var notificationRow: NotificationRowPresentation? { get }
+    var notificationSwitchesEnabled: Bool { get }
+    func didTapOpenNotificationSettings()
 
     func didAppear()
     func didDisappear()
@@ -48,6 +51,9 @@ extension GeneralSettingsViewModel {
     func didTapCancelRecovery() {}
     func didTapConfirmRecovery() {}
     func didTapRevealBackup() {}
+    var notificationRow: NotificationRowPresentation? { nil }
+    var notificationSwitchesEnabled: Bool { notificationRow?.switchesEnabled ?? true }
+    func didTapOpenNotificationSettings() {}
 }
 
 // MARK: - GeneralSettingsView
@@ -93,10 +99,16 @@ struct GeneralSettingsView<VM: GeneralSettingsViewModel>: View {
                     "Notify when a task finishes",
                     isOn: Binding(get: { viewModel.notifyOnFinish }, set: { viewModel.didToggleNotifyOnFinish($0) })
                 )
+                .disabled(!viewModel.notificationSwitchesEnabled)
                 Toggle(
                     "Notify when a request needs you",
                     isOn: Binding(get: { viewModel.notifyOnNeedsYou }, set: { viewModel.didToggleNotifyOnNeedsYou($0) })
                 )
+                .disabled(!viewModel.notificationSwitchesEnabled)
+                if let row = viewModel.notificationRow {
+                    Divider()
+                    notificationRow(row)
+                }
             }
             Section(GeneralSettingsGroup.runtime.title) {
                 runtimeRow(RuntimeRowPresentation(state: viewModel.runtimeSetupState))
@@ -116,6 +128,20 @@ struct GeneralSettingsView<VM: GeneralSettingsViewModel>: View {
         .onAppear { viewModel.didAppear() }
         .onDisappear { viewModel.didDisappear() }
         .publishViewEvent(from: viewModel, to: viewEvent)
+    }
+
+    private func notificationRow(_ row: NotificationRowPresentation) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(row.title)
+                Text(row.detail).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+            Spacer(minLength: 12)
+            if let action = row.actionTitle {
+                Button(action) { viewModel.didTapOpenNotificationSettings() }.accessibilityIdentifier("settings-notifications-action")
+            }
+        }
+        .accessibilityElement(children: .contain)
     }
 
     private func runtimeRow(_ row: RuntimeRowPresentation) -> some View {
@@ -138,6 +164,10 @@ struct GeneralSettingsView<VM: GeneralSettingsViewModel>: View {
 #if DEBUG
 #Preview("General - light") {
     GeneralSettingsView(GeneralSettingsViewModelMock()).preferredColorScheme(.light)
+}
+
+#Preview("General - denied") {
+    GeneralSettingsView(GeneralSettingsViewModelMock(notificationRow: NotificationRowPresentation(state: .denied)))
 }
 
 #Preview("General - dark") {

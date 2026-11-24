@@ -49,7 +49,7 @@ public final class SettingsCoordinator: SettingsNavigationCoordinator {
     
     public func buildGeneralSettingsView() -> AnyView {
         let useCase = GeneralSettingsViewRepository()
-        let vm = GeneralSettingsVM(useCase: useCase, recoveryRouting: self)
+        let vm = GeneralSettingsVM(useCase: useCase, recoveryRouting: self, notificationRouting: self)
         return GeneralSettingsView(vm).eraseToAnyView()
     }
     
@@ -82,5 +82,14 @@ extension SettingsCoordinator: StoreRecoveryRouting {
 extension SettingsCoordinator: HarnessesRouting {
     func openSetup() {
         parent.handle(path: MonitorDestination.openWindow)
+    }
+}
+
+// MARK: - NotificationSettingsRouting
+
+extension SettingsCoordinator: NotificationSettingsRouting {
+    func openNotificationSettings() {
+        guard let url = NotificationRowPresentation.settingsURL(bundleIdentifier: Bundle.main.bundleIdentifier) else { return }
+        NSWorkspace.shared.open(url)
     }
 }

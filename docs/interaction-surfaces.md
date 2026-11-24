@@ -81,6 +81,19 @@ answers, available, or unavailable when the command is unsupported) and, when th
 runs from a bundle, the notification permission. Neither is read through the
 notification centre when the app cannot post notifications.
 
+Settings → General → Behaviour shows both after the two notify switches
+(`NotificationPermissionObserving`, read through the notifier; HarflowDesign `8ec4d38`,
+`settings/notifications-*`). The permission is read when the tab appears and each time the
+app becomes active, so a change made in System Settings shows on return. A runtime without
+the feed wins over a denied permission: the row shows the missing-feature sentence and
+the two switches are disabled. A denied permission disables the two switches and offers
+Open System Settings, which opens
+`x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=<bundle id>`
+(an undocumented link; without a bundle identifier it opens the Notifications pane
+itself). Not yet asked and allowed show a note and leave the switches enabled. When the
+app cannot post (no bundle) the row is absent. "Open the window when a task starts" is
+never disabled.
+
 App-owned delivery IDs are persisted per selected engine state root, independently of
 engine storage. Initial historical episodes are baselined, retained newer episodes
 survive app restart, and completed scan cycles safely replay stable IDs without duplicate

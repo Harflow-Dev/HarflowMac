@@ -54,6 +54,8 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
 
     private(set) var appAppearance: AppAppearance
     @ObservationIgnored private let recoveryRouting: (any StoreRecoveryRouting)?
+    @ObservationIgnored private let notificationRouting: (any NotificationSettingsRouting)?
+    private(set) var notificationRow: NotificationRowPresentation?
     private(set) var openWindowOnStart: Bool
     private(set) var notifyOnFinish: Bool
     private(set) var notifyOnNeedsYou: Bool
@@ -63,11 +65,21 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
     @ObservationIgnored private let useCase: any GeneralSettingsUseCase
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private var didSubscribe = false
+    @ObservationIgnored private var notificationPermission: NotificationAuthorization?
+    @ObservationIgnored private var hasReadPermission = false
+    @ObservationIgnored private var feedAvailability: NotificationFeedAvailability
+    @ObservationIgnored private var permissionTask: Task<Void, Never>?
     
     // MARK: - Init
     
-    init(useCase: any GeneralSettingsUseCase, recoveryRouting: (any StoreRecoveryRouting)? = nil) {
+    init(
+        useCase: any GeneralSettingsUseCase,
+        recoveryRouting: (any StoreRecoveryRouting)? = nil,
+        notificationRouting: (any NotificationSettingsRouting)? = nil
+    ) {
         self.recoveryRouting = recoveryRouting
+        self.notificationRouting = notificationRouting
+        self.feedAvailability = (useCase as? any NotificationPermissionObserving)?.feedAvailability ?? .unknown
         self.useCase = useCase
         self.runtimeSetupState = (useCase as? any RuntimeSetupObserving)?.runtimeSetupState ?? .ready
         self.recoveryState = (useCase as? any StoreRecoveryUseCase)?.recoveryState ?? .idle
@@ -85,6 +97,8 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
     }
     
     func didDisappear() {
+        permissionTask?.cancel()
+        permissionTask = nil
         (useCase as? any StoreRecoveryUseCase)?.cancelRecovery()
         cancellables.removeAll()
         didSubscribe = false
@@ -126,6 +140,7 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
             .store(in: &cancellables)
 
         subscribeToSetupAndRecovery()
+        subscribeToNotificationPermission()
 
         useCase.openWindowOnStartPublisher()
             .receive(on: DispatchQueue.main)
@@ -147,6 +162,8 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
         guard runtimeSetupState.actionTitle != nil, let setup = useCase as? any RuntimeSetupObserving else { return }
         Task { await setup.installRuntime() }
     }
+
+    func didTapOpenNotificationSettings() { notificationRouting?.openNotificationSettings() }
 
     func didTapInspectStore() { Task { await (useCase as? any StoreRecoveryUseCase)?.inspectStore() } }
     func didTapRequestRecovery() {
@@ -188,5 +205,39 @@ final class GeneralSettingsVM: GeneralSettingsViewModel {
                 }
 .store(in: &cancellables)
         }
+    }
+
+    private func subscribeToNotificationPermission() {
+        guard let observing = useCase as? any NotificationPermissionObserving else { return }
+        refreshPermission(observing)
+        observing.feedAvailabilityPublisher()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] feed in
+                guard let self, feedAvailability != feed else { return }
+                feedAvailability = feed
+                updateNotificationRow()
+            }
+            .store(in: &cancellables)
+        // The permission is changed in System Settings, so it is read again whenever the app comes back.
+        observing.activationPublisher()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.refreshPermission(observing) }
+            .store(in: &cancellables)
+    }
+
+    private func refreshPermission(_ observing: any NotificationPermissionObserving) {
+        permissionTask?.cancel()
+        permissionTask = Task { [weak self] in
+            let permission = await observing.notificationPermission()
+            guard !Task.isCancelled, let self else { return }
+            notificationPermission = permission
+            hasReadPermission = true
+            updateNotificationRow()
+        }
+    }
+
+    private func updateNotificationRow() {
+        let row = hasReadPermission ? NotificationRowPresentation.row(permission: notificationPermission, feed: feedAvailability) : nil
+        if notificationRow != row { notificationRow = row }
     }
 }

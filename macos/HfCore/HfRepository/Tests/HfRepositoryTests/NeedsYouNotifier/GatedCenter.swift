@@ -16,6 +16,7 @@ final class GatedCenter: NotificationCentering, @unchecked Sendable {
     private var removedDeliveredIDs: [String] = []
     private var removedPendingIDs: [String] = []
     private var status: NotificationAuthorization = .allowed
+    private var touches = 0
 
     func hold(_ gate: Gate) { lock.withLock { _ = held.insert("\(gate)") } }
 
@@ -42,23 +43,27 @@ final class GatedCenter: NotificationCentering, @unchecked Sendable {
     }
 
     func requestAuthorization(options _: UNAuthorizationOptions) async throws -> Bool {
+        lock.withLock { touches += 1 }
         await pass(.authorization)
         return true
     }
 
     func add(_ request: UNNotificationRequest) async throws {
+        lock.withLock { touches += 1 }
         await pass(.add)
         lock.withLock { added.append(request) }
     }
 
-    func removeDelivered(identifiers: [String]) { lock.withLock { removedDeliveredIDs += identifiers } }
+    func removeDelivered(identifiers: [String]) { lock.withLock { touches += 1; removedDeliveredIDs += identifiers } }
 
-    func removePending(identifiers: [String]) { lock.withLock { removedPendingIDs += identifiers } }
+    func removePending(identifiers: [String]) { lock.withLock { touches += 1; removedPendingIDs += identifiers } }
 
-    func authorizationStatus() async -> NotificationAuthorization { lock.withLock { status } }
+    func authorizationStatus() async -> NotificationAuthorization { lock.withLock { touches += 1; return status } }
 
     func setStatus(_ value: NotificationAuthorization) { lock.withLock { status = value } }
 
+    /// Every call made on the centre, of any kind.
+    var touchCount: Int { lock.withLock { touches } }
     var delivered: [String] { lock.withLock { added.map(\.identifier) } }
     var removedDelivered: [String] { lock.withLock { removedDeliveredIDs } }
     var removedPending: [String] { lock.withLock { removedPendingIDs } }

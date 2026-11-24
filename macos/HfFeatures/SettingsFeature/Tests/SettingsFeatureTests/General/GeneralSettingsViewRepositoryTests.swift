@@ -11,9 +11,12 @@ import Testing
     private func makeSUT(
         settings: MockSettingsRepository = MockSettingsRepository(),
         taskList: MockTaskListRepository = MockTaskListRepository(),
-        install: MockInstallRepository = MockInstallRepository()
+        install: MockInstallRepository = MockInstallRepository(),
+        notifier: (any NeedsYouNotifier)? = nil
     ) -> GeneralSettingsViewRepository {
-        GeneralSettingsViewRepository(settingsRepository: settings, taskListRepository: taskList, installRepository: install)
+        GeneralSettingsViewRepository(
+            settingsRepository: settings, taskListRepository: taskList, installRepository: install, needsYouNotifier: notifier
+        )
     }
 
     @Test func givenTheRepositoryProperties_whenRead_thenTheyPassThroughToSettingsRepository() {
@@ -52,5 +55,39 @@ import Testing
         verify(settings).setOpenWindowOnStart(.value(false)).called(1)
         verify(settings).setNotifyOnFinish(.value(false)).called(1)
         verify(settings).setNotifyOnNeedsYou(.value(false)).called(1)
+    }
+
+    @Test func givenTheNotifier_whenReadingPermissionAndFeed_thenTheyPassThrough() async {
+        // given
+        let notifier = MockNeedsYouNotifier()
+        let feed = CurrentValueSubject<NotificationFeedAvailability, Never>(.available)
+        given(notifier).permission().willReturn(.denied)
+        given(notifier).feedAvailability.willReturn(.available)
+        given(notifier).feedAvailabilityPublisher().willReturn(feed.eraseToAnyPublisher())
+        let sut = makeSUT(notifier: notifier)
+        var received: [NotificationFeedAvailability] = []
+        let cancellable = sut.feedAvailabilityPublisher().sink { received.append($0) }
+        defer { cancellable.cancel() }
+
+        // when
+        feed.send(.unavailable)
+        let permission = await sut.notificationPermission()
+
+        // then
+        #expect(permission == .denied)
+        #expect(sut.feedAvailability == .available)
+        #expect(received == [.available, .unavailable])
+    }
+
+    @Test func givenTheDefaultNotifier_whenReadingPermission_thenThereIsNone() async {
+        // given
+        let sut = makeSUT()
+
+        // when
+        let permission = await sut.notificationPermission()
+
+        // then
+        #expect(permission == nil)
+        #expect(sut.feedAvailability == .unknown)
     }
 }

@@ -68,6 +68,18 @@ import Testing
         #expect(permission == nil)
     }
 
+    @Test func givenCannotNotify_whenPermissionRead_thenNilAndCentreUntouched() async {
+        // given
+        let center = GatedCenter()
+        center.setStatus(.denied)
+        let notifier = sut(center: center, canNotify: false)
+        // when
+        let permission = await notifier.permission()
+        // then
+        #expect(permission == nil)
+        #expect(center.touchCount == 0)
+    }
+
     @Test func givenAnApp_whenReadingPermission_thenTheCentreStatusIsReturned() async {
         // given
         let center = GatedCenter()
@@ -168,8 +180,7 @@ import Testing
 
     // MARK: - Polling without the interaction-events capability
 
-    private func versionInfo(capabilities: [String]) -> String {
-        let root = NSHomeDirectory() + "/.harflow"
+    private func versionInfo(capabilities: [String], root: String = NSHomeDirectory() + "/.harflow") -> String {
         let list = capabilities.map { "\"\($0)\"" }.joined(separator: ",")
         return "{\"product\":\"harflow\",\"format\":\"harflow.version-info\",\"v\":1,"
             + "\"product_version\":\"0.0.1\",\"component\":\"engine\",\"state_root\":\"\(root)\","
@@ -323,6 +334,41 @@ import Testing
         await waitUntil { sut.feedAvailability == .available }
         // then
         #expect(sut.feedAvailability == .available)
+    }
+
+    @Test func givenARuntimeSwitch_whenPolled_thenAvailabilityReturnsToUnknownBeforeTheNewAnswer() async {
+        // given
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        func switched(root: String, capabilities: [String]) -> CtlClient {
+            let info = versionInfo(capabilities: capabilities, root: root)
+            let body = "{\"product\":\"harflow\",\"format\":\"harflow.ctl\",\"v\":1,\"product_version\":\"0.0.1\","
+                + "\"result\":{\"events\":[],\"cycle_complete\":true,\"history_incomplete\":false}}"
+            let stub = StubProcessRunner { call in
+                call.arguments == ["version-info", "--json"] ? .success(stdout(info)) : .success(stdout(body))
+            }
+            return CtlClient(executable: "/fake/ctl", environment: [:], runner: stub,
+                             compatibilityContext: RuntimeCompatibilityContext(expectedStateRoot: root))
+        }
+        let first = switched(root: "/fixture/first", capabilities: baseCapabilities + ["interaction-events.v1"])
+        let second = switched(root: "/fixture/second", capabilities: baseCapabilities)
+        let selected = LockedBox(first)
+        let tooling = MockToolEnvironmentRepository()
+        given(tooling).ctl().willProduce { .success(selected.value) }
+        let scheduler = CapturingScheduler()
+        let sut = notifier(tooling: tooling, scheduler: scheduler, center: GatedCenter(), defaults: scratch.defaults)
+        let emissions = LockedBox<[NotificationFeedAvailability]>([])
+        let cancellable = sut.feedAvailabilityPublisher().sink { value in emissions.mutate { $0.append(value) } }
+        defer { cancellable.cancel() }
+        sut.start()
+        await waitUntil { sut.feedAvailability == .available }
+        await waitUntil { scheduler.oneShotCount(interval: 3) == 1 }
+        // when
+        selected.mutate { $0 = second }
+        scheduler.fireOneShot(interval: 3)
+        // then
+        await waitUntil { emissions.value.last == .unavailable }
+        #expect(emissions.value == [.unknown, .available, .unknown, .unavailable])
     }
 
     @Test func givenAnAnsweredRowRecordedEarlier_whenItsPendingRowArrivesAlone_thenNothingIsPosted() async {

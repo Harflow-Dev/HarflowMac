@@ -18,17 +18,20 @@ final class GeneralSettingsViewModelMock: GeneralSettingsViewModel {
     var notifyOnFinish: Bool
     var notifyOnNeedsYou: Bool
     var appAppearance: AppAppearance
+    var notificationRow: NotificationRowPresentation?
     
     init(
         openWindowOnStart: Bool = true,
         notifyOnFinish: Bool = true,
         notifyOnNeedsYou: Bool = true,
-        appAppearance: AppAppearance = .system
+        appAppearance: AppAppearance = .system,
+        notificationRow: NotificationRowPresentation? = nil
     ) {
         self.openWindowOnStart = openWindowOnStart
         self.notifyOnFinish = notifyOnFinish
         self.notifyOnNeedsYou = notifyOnNeedsYou
         self.appAppearance = appAppearance
+        self.notificationRow = notificationRow
     }
     
     func didAppear() {}

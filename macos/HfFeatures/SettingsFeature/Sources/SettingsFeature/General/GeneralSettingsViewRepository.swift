@@ -3,6 +3,7 @@
 //  SettingsFeature
 //
 
+import AppKit
 import Combine
 import Foundation
 import HfRepository
@@ -13,7 +14,8 @@ import SwiftEnvironment
 
 /// Concrete `GeneralSettingsUseCase` backed by `SettingsRepository`, the install, store-recovery and task-list repositories.
 @MainActor
-final class GeneralSettingsViewRepository: GeneralSettingsUseCase, RuntimeSetupObserving, StoreRecoveryUseCase, @unchecked Sendable {
+final class GeneralSettingsViewRepository: GeneralSettingsUseCase, RuntimeSetupObserving, StoreRecoveryUseCase,
+    NotificationPermissionObserving, @unchecked Sendable {
     
     // MARK: - Private Properties
     
@@ -21,6 +23,7 @@ final class GeneralSettingsViewRepository: GeneralSettingsUseCase, RuntimeSetupO
     @GlobalEnvironment(\.installRepository) private var installRepository
     @GlobalEnvironment(\.settingsRepository) private var settingsRepository
     @GlobalEnvironment(\.taskListRepository) private var taskListRepository
+    @GlobalEnvironment(\.needsYouNotifier) private var needsYouNotifier
 
     // MARK: - Init
 
@@ -28,12 +31,14 @@ final class GeneralSettingsViewRepository: GeneralSettingsUseCase, RuntimeSetupO
         settingsRepository: (any SettingsRepository)? = nil,
         taskListRepository: (any TaskListRepository)? = nil,
         installRepository: (any InstallRepository)? = nil,
-        stateRecoveryRepository: (any StateRecoveryRepository)? = nil
+        stateRecoveryRepository: (any StateRecoveryRepository)? = nil,
+        needsYouNotifier: (any NeedsYouNotifier)? = nil
     ) {
         if let stateRecoveryRepository { self.stateRecoveryRepository = stateRecoveryRepository }
         if let installRepository { self.installRepository = installRepository }
         if let settingsRepository { self.settingsRepository = settingsRepository }
         if let taskListRepository { self.taskListRepository = taskListRepository }
+        if let needsYouNotifier { self.needsYouNotifier = needsYouNotifier }
     }
     
     // MARK: - GeneralSettingsUseCase Properties
@@ -61,6 +66,13 @@ final class GeneralSettingsViewRepository: GeneralSettingsUseCase, RuntimeSetupO
               receipt.stateRoot == inspection.stateRoot, receipt.engineVersion == inspection.engineVersion,
               receipt.operationID == proposal.operationID, receipt.backupPath == proposal.backupPath else { return }
         taskListRepository.runtimeBecameReady()
+    }
+
+    func notificationPermission() async -> NotificationAuthorization? { await needsYouNotifier.permission() }
+    var feedAvailability: NotificationFeedAvailability { needsYouNotifier.feedAvailability }
+    func feedAvailabilityPublisher() -> AnyPublisher<NotificationFeedAvailability, Never> { needsYouNotifier.feedAvailabilityPublisher() }
+    func activationPublisher() -> AnyPublisher<Void, Never> {
+        NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification).map { _ in }.eraseToAnyPublisher()
     }
 
     func openWindowOnStartPublisher() -> AnyPublisher<Bool, Never> { settingsRepository.openWindowOnStartPublisher() }
