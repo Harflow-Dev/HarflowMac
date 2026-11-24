@@ -55,7 +55,7 @@ import Testing
 
     @Test(arguments: [
         ("needs_attention", "Needs you"), ("needs_input", "Needs you"), ("completed", "Done"),
-        ("failed", "Failed"), ("cancelled", "Cancelled"), ("running", "Running")
+        ("failed", "Failed"), ("cancelled", "Cancelled"), ("running", "Workflow run, running")
     ])
     func givenWorkflowRowStatus_whenHosted_thenItsLeadingIconCarriesTheApprovedLabel(status: String, expected: String) async throws {
         // given

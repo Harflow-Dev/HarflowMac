@@ -67,6 +67,43 @@ import Testing
         ["workflow_run_id": .string(id), "name": .string(id), "status": .string(status)]
     }
 
+    @Test func givenACreatedAt_whenMapped_thenRowCarriesStartedAt() throws {
+        // given
+        var raw = run("started", status: "running")
+        raw["created_at"] = .number(1_793_059_200)
+        // when
+        let row = try #require(WorkflowMenuBarRow(raw))
+        // then
+        #expect(row.startedAt == Date(timeIntervalSince1970: 1_793_059_200))
+    }
+
+    @Test func givenNoCreatedAt_whenMapped_thenStartedAtIsNil() throws {
+        // given
+        let raw = run("unstarted", status: "running")
+        // when
+        let row = try #require(WorkflowMenuBarRow(raw))
+        // then
+        #expect(row.startedAt == nil)
+    }
+
+    @Test func givenARootWithAChildNeedingAttention_whenRefreshed_thenTheMergedRowKeepsTheRootStart() async throws {
+        // given
+        var root = run("root", status: "completed")
+        root["created_at"] = .number(1_793_059_200)
+        var child = run("child", status: "needs_attention")
+        child["root_workflow_run_id"] = .string("root")
+        let useCase = MockWorkflowMenuBarUseCase()
+        given(useCase).runs().willReturn([root, child])
+        let sut = WorkflowMenuBarStatusVM(useCase: useCase, visibility: FakeMonitorVisibility(), scheduler: CapturingScheduler())
+        sut.setRuntimeReady(true)
+        // when
+        await sut.refresh()
+        // then
+        let merged = try #require(sut.rows.first { $0.id == "root" })
+        #expect(merged.status == "needs_attention")
+        #expect(merged.startedAt == Date(timeIntervalSince1970: 1_793_059_200))
+    }
+
     @Test func givenWorkflowsWithoutAgentTasks_whenRefreshed_thenBadgeIncludesRunningPausedAndAttention() async {
         // given
         let useCase = MockWorkflowMenuBarUseCase()

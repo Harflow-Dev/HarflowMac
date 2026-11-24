@@ -23,6 +23,7 @@ struct MenuBarNeedsYouSection: Equatable, Sendable {
     }
 
     static let rowLimit = 3
+    static let unsupportedLine = "This Harflow runtime version cannot report workflow questions here."
 
     let count: Int
     let isLowerBound: Bool
@@ -140,7 +141,7 @@ struct MenuBarNeedsYouSectionView: View {
                 Button(section.showAllTitle, action: showAll).buttonStyle(.link).font(.hf(.secondary))
             }
             if section.olderEngine {
-                Text("This engine version cannot report workflow questions here.")
+                Text(MenuBarNeedsYouSection.unsupportedLine)
                     .font(.hf(.caption))
 .foregroundStyle(Color.primaryText)
             }

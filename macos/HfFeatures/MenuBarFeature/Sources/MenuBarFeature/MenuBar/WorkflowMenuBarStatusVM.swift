@@ -27,8 +27,12 @@ struct WorkflowMenuBarRow: Identifiable, Equatable {
     let status: String
     let detail: String
     let isSettling: Bool
+    /// The engine's `created_at` (epoch seconds), the same source as the sidebar's workflow rows; nil when the
+    /// listing omits it, in which case no elapsed time is shown.
+    let startedAt: Date?
     var isActive: Bool { isSettling || ["starting", "running", "paused", "needs_attention", "needs_input", "cancelling"].contains(status) }
     var isWorking: Bool { isSettling || ["starting", "running", "cancelling"].contains(status) }
+    var isRunning: Bool { !isSettling && status == "running" }
     var needsAttention: Bool { ["needs_attention", "needs_input"].contains(status) }
     var statusLabel: String { isSettling ? "Settling" : status.replacingOccurrences(of: "_", with: " ").capitalized }
 
@@ -39,6 +43,7 @@ struct WorkflowMenuBarRow: Identifiable, Equatable {
         self.name = raw["name"]?.stringValue ?? "Workflow"
         self.status = raw["status"]?.stringValue ?? "unknown"
         self.isSettling = raw["settling"]?.boolValue ?? false
+        self.startedAt = raw["created_at"]?.doubleValue.map(Date.init(timeIntervalSince1970:))
         let decision = raw["decisions"]?.arrayValue?.last?["reason"]?.stringValue
         self.detail = raw["attention_reason"]?.stringValue ?? decision ?? "Workflow"
     }
@@ -183,7 +188,8 @@ final class WorkflowMenuBarStatusVM: ViewModel {
                       attention.needsAttention || !row.isActive else { return row }
                 return WorkflowMenuBarRow(["workflow_run_id": .string(row.id), "name": .string(row.name),
                     "status": .string(attention.status), "attention_reason": .string("\(attention.name): \(attention.detail)"),
-                    "settling": .bool(row.isSettling)]) ?? row
+                    "settling": .bool(row.isSettling)]
+                    .merging(row.startedAt.map { ["created_at": .number($0.timeIntervalSince1970)] } ?? [:]) { $1 }) ?? row
             }
             apply(rows: nextRows, loadingCounts: loadingCounts, activeCount: activeCount, attentionCount: attentionCount)
         } catch {

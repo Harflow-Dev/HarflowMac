@@ -20,14 +20,45 @@ struct WorkflowMenuBarRowView: View {
                         leadingIcon
                         Text(model.name).font(.hf(.body, weight: .medium)).lineLimit(1)
                         Spacer(minLength: HfRadius.Metrics.spacing4)
-                        Text(model.statusLabel)
-                            .font(.hf(.caption, weight: model.needsAttention ? .semibold : .regular))
-                            .foregroundStyle(model.needsAttention ? Color.warningFG : Color.secondaryText)
+                        trailing
                     }
                     Text(model.detail).font(.hf(.caption)).foregroundStyle(Color.secondaryText).lineLimit(2)
                 }
             }.contentShape(Rectangle())
         }.buttonStyle(.plain)
+    }
+}
+
+// MARK: - WorkflowMenuBarRowView trailing meta
+
+extension WorkflowMenuBarRowView {
+    /// What the row shows at its trailing edge.
+    enum Trailing: Equatable {
+        case elapsed(since: Date)
+        case status(String)
+    }
+
+    /// A running run with a known start shows its elapsed time; every other row, and a running one whose
+    /// listing carried no start time, keeps its status label (a time is never invented).
+    nonisolated static func trailing(for row: WorkflowMenuBarRow) -> Trailing {
+        if row.isRunning, let startedAt = row.startedAt { return .elapsed(since: startedAt) }
+        return .status(row.statusLabel)
+    }
+
+    @ViewBuilder private var trailing: some View {
+        switch Self.trailing(for: model) {
+        case .elapsed(let startedAt):
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                Text(Format.clock(max(0, context.date.timeIntervalSince(startedAt))))
+                    .font(.hf(.caption))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.tertiaryText)
+            }
+        case .status(let label):
+            Text(label)
+                .font(.hf(.caption, weight: model.needsAttention ? .semibold : .regular))
+                .foregroundStyle(model.needsAttention ? Color.warningFG : Color.secondaryText)
+        }
     }
 }
 
@@ -38,7 +69,11 @@ extension WorkflowMenuBarRowView {
     /// glyph when done). Anything else keeps the branch symbol.
     @ViewBuilder private var leadingIcon: some View {
         let status = TaskStatus(model.status)
-        if model.isWorking {
+        if model.isRunning {
+            RunningSpinner()
+.frame(width: HfRadius.Metrics.statusIconSize, height: HfRadius.Metrics.statusIconSize)
+                .accessibilityLabel("Workflow run, running")
+        } else if model.isWorking {
             RunningSpinner().frame(width: HfRadius.Metrics.statusIconSize, height: HfRadius.Metrics.statusIconSize)
         } else if model.needsAttention {
             StatusIcon(status: .other("needs_attention"), kind: .workflowRun)
@@ -54,7 +89,8 @@ extension WorkflowMenuBarRowView {
 @MainActor
 private func workflowMenuBarRowPreview(status: String, attentionReason: String? = nil) -> some View {
     var raw: [String: JSONValue] = [
-        "workflow_run_id": .string("preview"), "name": .string("Implement and review"), "status": .string(status)
+        "workflow_run_id": .string("preview"), "name": .string("Implement and review"), "status": .string(status),
+        "created_at": .number(Date.now.addingTimeInterval(-754).timeIntervalSince1970)
     ]
     if let attentionReason { raw["attention_reason"] = .string(attentionReason) }
     let model = WorkflowMenuBarRow(raw)

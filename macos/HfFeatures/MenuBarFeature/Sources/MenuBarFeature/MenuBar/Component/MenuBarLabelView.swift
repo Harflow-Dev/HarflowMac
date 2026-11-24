@@ -62,15 +62,42 @@ struct MenuBarLabelView<VM: MenuBarViewModel>: View {
         }
         .accessibilityLabel("Harflow")
         .accessibilityValue(
-            (viewModel.taskCountsLoading ? "Agent count loading, " : "\(viewModel.runningCount) agents running, ")
-                + (viewModel.workflowCountsLoading ? "Workflow count loading, " : "\(viewModel.workflowActiveCount) workflows, ")
-                + (viewModel.workflowCountsLoading ? "Attention count loading" : "\(viewModel.workflowAttentionCount) need attention")
+            MenuBarLabelAccessibility.accessibilityValue(
+                runtimeCard: viewModel.runtimeCard,
+                counts: .init(
+                    taskCountsLoading: viewModel.taskCountsLoading,
+                    runningCount: viewModel.runningCount,
+                    workflowCountsLoading: viewModel.workflowCountsLoading,
+                    workflowActiveCount: viewModel.workflowActiveCount,
+                    workflowAttentionCount: viewModel.workflowAttentionCount
+                )
+            )
         )
         .onAppear {
             viewModel.didAppear()
             viewModel.didCaptureWindowOpener { openWindow(id: "main") }
         }
         .onDisappear { viewModel.didDisappearStatusItem() }
+    }
+}
+
+// MARK: - MenuBarLabelAccessibility
+
+enum MenuBarLabelAccessibility {
+    struct Counts: Equatable, Sendable {
+        var taskCountsLoading = false
+        var runningCount = 0
+        var workflowCountsLoading = false
+        var workflowActiveCount = 0
+        var workflowAttentionCount = 0
+    }
+
+    /// While the runtime is not ready the counts are meaningless, so VoiceOver reads the runtime card's subline.
+    nonisolated static func accessibilityValue(runtimeCard: MenuBarRuntimeCard?, counts: Counts) -> String {
+        if let runtimeCard { return runtimeCard.subline }
+        return (counts.taskCountsLoading ? "Agent count loading, " : "\(counts.runningCount) agents running, ")
+            + (counts.workflowCountsLoading ? "Workflow count loading, " : "\(counts.workflowActiveCount) workflows, ")
+            + (counts.workflowCountsLoading ? "Attention count loading" : "\(counts.workflowAttentionCount) need attention")
     }
 }
 

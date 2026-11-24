@@ -71,6 +71,7 @@ import Testing
         // when / then
         #expect(row.isActive)
         #expect(row.isWorking)
+        #expect(!row.isRunning)
         #expect(row.statusLabel == "Settling")
     }
 
@@ -219,6 +220,25 @@ import Testing
         ))
         #expect(fixture.window.performKeyEquivalent(with: event))
         await waitUntil { model.openMonitorCount == 1 }
+    }
+
+    @Test func givenWorkflowStatusErrorWithNoRows_whenHosted_thenOneWorkflowsLabelSitsAboveTheError() async throws {
+        // given
+        let model = MenuBarHostedModel(runningCount: 0)
+        model.workflowRows = []
+        model.workflowStatusError = "Workflow status unavailable"
+        let fixture = MenuBarHostedFixture(model: model)
+        defer { fixture.close() }
+
+        // when
+        await fixture.settle { fixture.element("Workflows") != nil && fixture.containsText("Workflow status unavailable") }
+
+        // then
+        #expect(fixture.matching("Workflows").count == 1)
+        let label = try #require(fixture.element("Workflows"))
+        let labelFrame = try #require(fixture.windowFrame(label))
+        let errorFrame = try #require(fixture.firstFrame(containing: "Workflow status unavailable"))
+        #expect(labelFrame.maxY > errorFrame.maxY)
     }
 
     @Test func givenListAndWorkflowNotices_whenHosted_thenOriginalMessagesRemainAndListNoticePrecedesSections() async throws {

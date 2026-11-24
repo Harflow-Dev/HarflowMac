@@ -106,6 +106,14 @@ import Testing
         #expect(sut.needsYou?.olderEngine == true)
     }
 
+    @Test func givenWorkflowInputsUnsupported_whenSectionBuilt_thenRuntimeWording() {
+        // given / when
+        let section = MenuBarNeedsYouSection(NeedsYouSnapshot(phase: .ready, workflowInputsUnsupported: true))
+        // then
+        #expect(section?.olderEngine == true)
+        #expect(MenuBarNeedsYouSection.unsupportedLine == "This Harflow runtime version cannot report workflow questions here.")
+    }
+
     @Test func givenRowAndShowAll_whenTapped_thenRoutingSelectsAndOpensTheWindow() {
         // given
         let (sut, _, routing) = makeSUT(NeedsYouSnapshot(phase: .ready, items: [item("input:a:1")]))
