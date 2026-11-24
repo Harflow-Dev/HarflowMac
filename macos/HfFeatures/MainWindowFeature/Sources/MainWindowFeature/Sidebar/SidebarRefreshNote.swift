@@ -1,4 +1,5 @@
 import AppKit
+import HfRepository
 import MonitorCore
 
 // MARK: - SidebarRefreshNote

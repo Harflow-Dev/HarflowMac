@@ -1,3 +1,4 @@
+import HfRepository
 import SwiftUI
 
 // MARK: - InitialWorkLoadingView

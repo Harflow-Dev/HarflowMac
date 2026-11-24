@@ -1,4 +1,5 @@
 import HfCommon
+import HfRepository
 import HfUI
 import HfUtilities
 import SwiftUI
