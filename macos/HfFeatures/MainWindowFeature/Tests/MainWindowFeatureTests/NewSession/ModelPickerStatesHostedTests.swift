@@ -188,6 +188,8 @@ struct ModelPickerStatesHostedTests {
                 if let note = scenario.expectedNote {
                     await waitUntil(timeout: 8) { contains(note, in: popover) }
                 } else {
+                    // A harness still reading its listing shows the loading note; wait for the phase to settle first.
+                    await waitUntil(timeout: 8) { viewModel.modelListingPhase != .loading }
                     await waitUntil(timeout: 3) { contains("Harness", in: popover) }
                 }
                 await DisplayFrames.waitForPresentedFrame()
