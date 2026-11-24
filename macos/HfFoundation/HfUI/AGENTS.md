@@ -42,3 +42,4 @@ package needs belongs in that feature's own `Component/` folder, not here.
   ("Needs attention"); that difference is accepted. `StatusBadgePresentation.Indicator.glyph` and `StatusIndicatorView` draw the
   hand outside `StatusIcon`. Out-of-set states (pending, paused, unknown) keep their circles and triangle.
 - `DetailLine` is the shared "caption label above a monospaced, selectable value" (the design's `codeRow`): a refusal's "Code" line under its sentence. `RuntimeGateView` renders its detail rows through it; Settings → Harnesses uses it for the refused block and row failures.
+- `InstallBanner` is removed. The menu bar draws the runtime states itself (`MenuBarRuntimeCard` in MenuBarFeature) and no surface draws an install success notice.

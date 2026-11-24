@@ -11,7 +11,7 @@ import SwiftEnvironment
 
 // MARK: - MenuBarViewRepository
 
-/// Concrete `MenuBarUseCase` backed by `TaskListRepository`, `EventStreamRepository` and `InstallRepository`.
+/// Concrete `MenuBarUseCase` backed by `TaskListRepository`, `EventStreamRepository`, `InstallRepository` and `StateRecoveryRepository`.
 @MainActor
 final class MenuBarViewRepository: MenuBarUseCase, MenuBarCountAvailabilityUseCase, MenuBarNeedsYouUseCase, @unchecked Sendable {
     
@@ -20,6 +20,7 @@ final class MenuBarViewRepository: MenuBarUseCase, MenuBarCountAvailabilityUseCa
     @GlobalEnvironment(\.taskListRepository) private var taskListRepository
     @GlobalEnvironment(\.eventStreamRepository) private var eventStreamRepository
     @GlobalEnvironment(\.installRepository) private var installRepository
+    @GlobalEnvironment(\.stateRecoveryRepository) private var stateRecoveryRepository
     @GlobalEnvironment(\.approvalResponseOwner) private var approvalResponseOwner
     @GlobalEnvironment(\.needsYouRepository) private var needsYouRepository
 
@@ -47,11 +48,13 @@ final class MenuBarViewRepository: MenuBarUseCase, MenuBarCountAvailabilityUseCa
     init(
         taskListRepository: (any TaskListRepository)? = nil,
         eventStreamRepository: (any EventStreamRepository)? = nil,
-        installRepository: (any InstallRepository)? = nil
+        installRepository: (any InstallRepository)? = nil,
+        stateRecoveryRepository: (any StateRecoveryRepository)? = nil
     ) {
         if let taskListRepository { self.taskListRepository = taskListRepository }
         if let eventStreamRepository { self.eventStreamRepository = eventStreamRepository }
         if let installRepository { self.installRepository = installRepository }
+        if let stateRecoveryRepository { self.stateRecoveryRepository = stateRecoveryRepository }
     }
     
     // MARK: - MenuBarUseCase Methods
@@ -65,27 +68,47 @@ final class MenuBarViewRepository: MenuBarUseCase, MenuBarCountAvailabilityUseCa
     var connectionLine: String { taskListRepository.connectionLine }
     var countsComplete: Bool { taskListRepository.historyState.countsComplete }
     var runningCount: Int { taskListRepository.runningCount }
-    var runtimeReady: Bool { installRepository.setupState.isReady }
-    func runtimeReadyPublisher() -> AnyPublisher<Bool, Never> { Self.readiness(installRepository.setupStatePublisher()) }
-
-    /// Built in a `nonisolated static` helper because the upstream can emit off the main thread, and a
-    /// main-actor closure applied there would trap.
-    nonisolated static func readiness(_ states: AnyPublisher<RuntimeSetupState, Never>) -> AnyPublisher<Bool, Never> {
-        states.map(\.isReady).removeDuplicates().eraseToAnyPublisher()
+    var runtimeSetupState: RuntimeSetupState { installRepository.setupState }
+    func runtimeSetupStatePublisher() -> AnyPublisher<RuntimeSetupState, Never> {
+        installRepository.setupStatePublisher().removeDuplicates().eraseToAnyPublisher()
     }
-    
+
+    var workAvailable: Bool {
+        Self.workAvailability(setup: installRepository.setupState, listError: taskListRepository.listError, store: stateRecoveryRepository.state)
+    }
+
+    func workAvailablePublisher() -> AnyPublisher<Bool, Never> {
+        Self.workAvailability(
+            setup: installRepository.setupStatePublisher(),
+            listErrors: taskListRepository.listErrorPublisher(),
+            stores: stateRecoveryRepository.statePublisher()
+        )
+    }
+
+    func refreshWork() async { await taskListRepository.refresh() }
+
+    /// Work can start while the runtime is ready and no contract, capability or store gate refuses it: the same
+    /// classification the main window uses to block creation.
+    nonisolated static func workAvailability(setup: RuntimeSetupState, listError: ToolError?, store: StoreRecoveryState) -> Bool {
+        setup.isReady && MainWindowGate.classify(runtimeReady: true, listError: listError, storeState: store) == nil
+    }
+
+    /// Built in a `nonisolated static` helper because the upstreams can emit off the main thread, and a main-actor
+    /// closure applied there would trap.
+    nonisolated static func workAvailability(
+        setup: AnyPublisher<RuntimeSetupState, Never>,
+        listErrors: AnyPublisher<ToolError?, Never>,
+        stores: AnyPublisher<StoreRecoveryState, Never>
+    ) -> AnyPublisher<Bool, Never> {
+        Publishers.CombineLatest3(setup, listErrors, stores)
+            .map { workAvailability(setup: $0, listError: $1, store: $2) }
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+    }
+
     func title(_ taskID: String) -> String { taskListRepository.title(taskID) }
     
     func acquireEventLease(_ taskID: String) -> any EventStreamLease { eventStreamRepository.acquire(taskID) }
     func itemsPublisher(_ taskID: String) -> AnyPublisher<[TimelineItem], Never> { eventStreamRepository.itemsPublisher(for: taskID) }
     func current(_ taskID: String) -> TimelineItem? { eventStreamRepository.current(for: taskID) }
-
-    // MARK: Install
-
-    func installStatePublisher() -> AnyPublisher<InstallState, Never> { installRepository.statePublisher() }
-    var installState: InstallState { installRepository.state }
-    func lastCheckMessagePublisher() -> AnyPublisher<String?, Never> { installRepository.lastCheckMessagePublisher() }
-    var lastCheckMessage: String? { installRepository.lastCheckMessage }
-    func retry() async { await installRepository.retry() }
-    func reset() { installRepository.reset() }
 }

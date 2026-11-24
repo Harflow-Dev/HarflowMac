@@ -85,7 +85,6 @@ private final class MenuBarLabelPreviewModel: MenuBarViewModel {
     var runningRows: [MenuBarRunningRowModel] = []
     var recentGroups: [ParallelGroup] = []
     var recentTasks: [TaskRowModel] = []
-    var listErrorMessage: String?
     var isConnected = true
     var connectionLine = "connected · harflow-ctl"
     var runningCount: Int
@@ -97,7 +96,8 @@ private final class MenuBarLabelPreviewModel: MenuBarViewModel {
     var workflowRows: [WorkflowMenuBarRow] = []
     var workflowStatusError: String?
     var headerSubline = "harflow connected"
-    var installBannerModel: InstallBanner.Model?
+    var runtimeCard: MenuBarRuntimeCard?
+    var refreshNote: MenuBarRefreshNote?
 
     init(
         runningCount: Int = 0,
@@ -123,8 +123,7 @@ private final class MenuBarLabelPreviewModel: MenuBarViewModel {
     func didTapOpenMonitor() {}
     func didTapNewSession() {}
     func didCaptureWindowOpener(_: @escaping () -> Void) {}
-    func didTapInstallBannerPrimary() {}
-    func didTapInstallBannerDismiss() {}
+    func didTapRetryRefresh() {}
 }
 
 #Preview("P-bridge icon - light") {

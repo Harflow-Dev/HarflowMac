@@ -18,13 +18,13 @@ final class MenuBarViewModelMock: MenuBarViewModel {
     var runningRows: [MenuBarRunningRowModel]
     var recentGroups: [ParallelGroup]
     var recentTasks: [TaskRowModel]
-    var listErrorMessage: String?
     var isConnected: Bool
     var connectionLine: String
     var runningCount: Int
     var canStartNewSession = true
     var headerSubline: String { isConnected ? "harflow connected" : connectionLine }
-    var installBannerModel: InstallBanner.Model?
+    var runtimeCard: MenuBarRuntimeCard?
+    var refreshNote: MenuBarRefreshNote?
     var needsYou: MenuBarNeedsYouSection?
     func didSelectNeedsYou(_: String) {}
     func didTapShowAllNeedsYou() {}
@@ -40,21 +40,21 @@ final class MenuBarViewModelMock: MenuBarViewModel {
         recentTasks: [TaskRowModel] = [
             TaskRowModel(id: "def456", backend: "codex", title: "Refactor the parser", status: .completed, repoName: "repo", ageText: "3h")
         ],
-        listErrorMessage: String? = nil,
         isConnected: Bool = true,
         connectionLine: String = "connected · harflow-ctl",
         runningCount: Int = 1,
-        installBannerModel: InstallBanner.Model? = nil,
+        runtimeCard: MenuBarRuntimeCard? = nil,
+        refreshNote: MenuBarRefreshNote? = nil,
         needsYou: MenuBarNeedsYouSection? = nil
     ) {
         self.runningRows = runningRows
         self.recentGroups = recentGroups
         self.recentTasks = recentTasks
-        self.listErrorMessage = listErrorMessage
         self.isConnected = isConnected
         self.connectionLine = connectionLine
         self.runningCount = runningCount
-        self.installBannerModel = installBannerModel
+        self.runtimeCard = runtimeCard
+        self.refreshNote = refreshNote
         self.needsYou = needsYou
     }
 
@@ -88,14 +88,10 @@ final class MenuBarViewModelMock: MenuBarViewModel {
         )
     }
 
-    static var runtimeFailed: MenuBarViewModelMock {
-        MenuBarViewModelMock(installBannerModel: .init(
-            title: "Harflow runtime preparation failed",
-            detail: "The managed runtime is unavailable. Try again to prepare it.",
-            primaryTitle: "Try again",
-            errorText: "Runtime preparation failed.",
-            canDismiss: true
-        ))
+    static func runtimeNotReady(_ card: MenuBarRuntimeCard) -> MenuBarViewModelMock {
+        let model = MenuBarViewModelMock(runningRows: [], recentTasks: [], runningCount: 0, runtimeCard: card)
+        model.canStartNewSession = false
+        return model
     }
 
     func didAppear() {}
@@ -108,8 +104,7 @@ final class MenuBarViewModelMock: MenuBarViewModel {
     func didTapOpenMonitor() {}
     func didTapNewSession() {}
     func didCaptureWindowOpener(_: @escaping () -> Void) {}
-    func didTapInstallBannerPrimary() {}
-    func didTapInstallBannerDismiss() {}
+    func didTapRetryRefresh() {}
 }
 
 #endif

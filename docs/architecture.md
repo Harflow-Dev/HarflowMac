@@ -110,7 +110,7 @@ The window’s principal toolbar shows the current Harflow section with a 7-poin
 
 `HarflowApp` creates and retains one `AppAppearanceController` after module initialization and before constructing the coordinator or any scenes. It applies the saved value synchronously, then follows live repository updates. Light maps to `NSAppearance.aqua`, Dark to `NSAppearance.darkAqua`, and System clears `NSApp.appearance` so macOS remains in control. The app-level appearance covers its windows, sheets, Settings scene, menu bar content, and windows created later; feature views do not force a color scheme.
 
-The New session glass material refreshes its identity when the effective color scheme changes, so switching back to Dark does not retain Light material. `ManagedInstallRepository` shares a transient success notice with the menu bar only after an explicit install or update in the current app session. Dismissal or quitting ends that notice; startup reuse of a qualified runtime does not create one. Hiding a notice does not change setup readiness or suppress a future required update.
+The New session glass material refreshes its identity when the effective color scheme changes, so switching back to Dark does not retain Light material. The menu bar shows no install success notice: `InstallBanner` is gone, and a completed install or update is visible only as the runtime becoming ready.
 
 Harnesses follows runtime readiness (`RuntimeSetupState`) and draws no install banner. Its readiness is seeded from the current setup state, so the replayed snapshot does not load a second time. While the runtime is not ready it calls neither `harflow-setup` nor `harflow-ctl backends` and shows the setup note with Open setup, which routes to the main window; losing readiness clears the page and cancels in-flight work, and a not-ready to ready edge loads the registrations and qualification once. A failed status load shows the engine's sentence (`ToolError.displayMessage`) with the refusal code on a `DetailLine` and Retry, and clears the rows; a failed action is kept per row with its code and a Retry that repeats the action after the same confirmation. `DetailLine` (HfUI) is the one "label above monospaced value" primitive, shared with the main-window gates; `ToolError.detailCode` is the code it prints. The MCP approvals panel (`MCPApprovalsPanel`, built by the coordinator's closure) is an inline row after its harness row, created once when it opens (`InlineAllowlistPanel`) so list updates never replace its view model. `MCPAllowlistVM` keeps the answer (`hasAnswer`, entries, path, detail) apart from the failure (message, `detailCode`, missing-feature sentence): a failed read clears the answer and disables the field, a refused change keeps both the answer and the typed entry, and an `mcp-allowlist` unsupported-command answer shows `MissingFeature.sentence(canDo: "edit global MCP approvals")`.
 
@@ -535,6 +535,16 @@ stale checkpoint states, and menu-bar busy/stale/answered-elsewhere cards. Menu
 approval cards offer Approve once and Reject only; a caller-response capability
 missing from the selected runtime leaves the card read-only. Question Answer still
 opens the app. The 380 × 560 popover retains fixed header/footer and a scrolling body.
+
+The popover follows the runtime (HarflowDesign `8ec4d38`, `menu-bar/runtime-setup`, `-preparing`, `-failed`,
+`engine-call-failed`). `MenuBarUseCase` publishes the `RuntimeSetupState` and a separate work-availability flag; the
+repository derives the flag in a `nonisolated static` function from the setup state, the listing error and the shared
+store state with `MainWindowGate.classify` (HfRepository), so the "+" button is disabled for exactly the gates that block
+creation in the main window. While the state is not ready, `MenuBarRuntimeCard.card(for:)` replaces the sections with one
+block (setup required, preparing, failed with the failure message; Open Harflow shows the main window), the connection dot
+and subline row are hidden, and no spinner is drawn. On a ready runtime, a listing error that is not a managed-runtime
+error becomes `MenuBarRefreshNote` (the sentence from `LoadingWorkError`, no refusal code) above the sections, with Retry
+refreshing the listing; the rows stay.
 
 
 ## Native workflow library

@@ -167,6 +167,33 @@ import Testing
         #expect(fixture.containsText(workflowText))
     }
 
+    @Test(arguments: [
+        (MenuBarRuntimeCard.setupRequired, "Finish setting up Harflow to see your work."),
+        (.preparing, "Preparing the exact paired runtime. This can take a few minutes."),
+        (.failed(message: "Package verification failed."), "The managed runtime is unavailable. Try again to prepare it.")
+    ])
+    func givenARuntimeCard_whenHosted_thenItReplacesTheSectionsAndTheConnectionRow(card: MenuBarRuntimeCard, text: String) async throws {
+        // given
+        let model = MenuBarHostedModel.busy
+        model.runtimeCard = card
+        model.canStartNewSession = false
+        let fixture = MenuBarHostedFixture(model: model)
+        defer { fixture.close() }
+
+        // when
+        await fixture.settle { fixture.containsText(text) }
+
+        // then — one block between the header and the footer: no sections, no dot row, "+" disabled.
+        #expect(fixture.containsText(card.subline))
+        #expect(!fixture.containsText("Workflows"))
+        #expect(!fixture.containsText("Running"))
+        #expect(!fixture.containsText("harflow connected"))
+        let newSession = try #require(fixture.element("New session"))
+        _ = fixture.press(newSession)
+        for _ in 0 ..< 10 { await Task.yield() }
+        #expect(model.newSessionCount == 0)
+    }
+
     @Test func givenLongHeaderAndWorkflowCount_whenHosted_thenFooterTargetsRemainVisible() async throws {
         // given
         let model = MenuBarHostedModel(runningCount: 123)
@@ -197,7 +224,7 @@ import Testing
     @Test func givenListAndWorkflowNotices_whenHosted_thenOriginalMessagesRemainAndListNoticePrecedesSections() async throws {
         // given
         let model = MenuBarHostedModel(runningCount: 1)
-        model.listErrorMessage = "harflow-ctl couldn't list tasks: no installation found."
+        model.refreshNote = MenuBarRefreshNote(message: "harflow-ctl task-list-page exited 1 without a JSON answer.")
         model.workflowStatusError = "Workflow status unavailable"
         model.workflowRows = [WorkflowMenuBarRow([
             "workflow_run_id": .string("run-1"), "name": .string("code-review"), "status": .string("running")
@@ -207,15 +234,19 @@ import Testing
         defer { fixture.close() }
 
         // when
-        await fixture.settle { fixture.containsText("no installation found") && fixture.containsText("Workflows") }
+        await fixture.settle { fixture.containsText("without a JSON answer") && fixture.containsText("Workflows") }
 
-        // then — notices stay durable and retain their original wording/action-free behavior.
-        #expect(fixture.containsText("harflow-ctl couldn't list tasks: no installation found."))
+        // then — notices stay durable and retain their original wording.
+        #expect(fixture.containsText("Couldn't refresh your work"))
+        #expect(fixture.containsText("harflow-ctl task-list-page exited 1 without a JSON answer."))
         #expect(fixture.containsText("Workflow status unavailable"))
-        let noticeFrame = try #require(fixture.firstFrame(containing: "no installation found"))
+        let noticeFrame = try #require(fixture.firstFrame(containing: "without a JSON answer"))
         let workflowsElement = try #require(fixture.element("Workflows"))
         let workflowsFrame = try #require(fixture.windowFrame(workflowsElement))
         #expect(noticeFrame.maxY > workflowsFrame.maxY)
+        let retry = try #require(fixture.element("Retry"))
+        #expect(fixture.press(retry))
+        await waitUntil { model.retryCount == 1 }
         #expect(model.newSessionCount == 0)
         #expect(model.openMonitorCount == 0)
     }
@@ -393,7 +424,6 @@ import Testing
     var runningRows: [MenuBarRunningRowModel] = []
     var recentGroups: [ParallelGroup] = []
     var recentTasks: [TaskRowModel] = []
-    var listErrorMessage: String?
     var isConnected = true
     var connectionLine = "connected · harflow-ctl"
     var runningCount: Int
@@ -405,7 +435,9 @@ import Testing
     var workflowAttentionCount = 0
     var workflowStatusError: String?
     var headerSubline = "harflow connected"
-    var installBannerModel: InstallBanner.Model?
+    var runtimeCard: MenuBarRuntimeCard?
+    var refreshNote: MenuBarRefreshNote?
+    var retryCount = 0
     var appearCount = 0
     var newSessionCount = 0
     var openMonitorCount = 0
@@ -451,6 +483,5 @@ import Testing
     func didTapOpenMonitor() { openMonitorCount += 1 }
     func didTapNewSession() { newSessionCount += 1 }
     func didCaptureWindowOpener(_: @escaping () -> Void) {}
-    func didTapInstallBannerPrimary() {}
-    func didTapInstallBannerDismiss() {}
+    func didTapRetryRefresh() { retryCount += 1 }
 }

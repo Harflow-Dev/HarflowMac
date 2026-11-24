@@ -31,7 +31,7 @@ public extension Color {
     static let cancelledGray = Palette.cancelledGray.color
     static let runningBG = Palette.runningBG.color
     static let runningFG = Palette.runningFG.color
-    /// Neutral card/chip fill (the install banner, a default `Chip`).
+    /// Neutral card/chip fill (a default `Chip`).
     static let neutralFill = Palette.neutralFill.color
     /// Text on `neutralFill`.
     static let neutralText = Palette.neutralText.color

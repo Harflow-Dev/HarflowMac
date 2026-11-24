@@ -34,10 +34,16 @@ protocol MenuBarUseCase: Sendable {
 
     var connectionLine: String { get }
     var runningCount: Int { get }
-    /// Whether the managed runtime is ready (`InstallRepository.setupState.isReady`).
-    var runtimeReady: Bool { get }
-    /// Deduplicated runtime readiness. May emit off the main thread.
-    func runtimeReadyPublisher() -> AnyPublisher<Bool, Never>
+    /// The managed runtime's setup state (`InstallRepository.setupState`).
+    var runtimeSetupState: RuntimeSetupState { get }
+    /// Deduplicated setup state. May emit off the main thread.
+    func runtimeSetupStatePublisher() -> AnyPublisher<RuntimeSetupState, Never>
+    /// Whether work can be started: the runtime is ready and neither a contract gate nor the store gate refuses work.
+    var workAvailable: Bool { get }
+    /// Deduplicated work availability. May emit off the main thread.
+    func workAvailablePublisher() -> AnyPublisher<Bool, Never>
+    /// Lists the work again (the refresh note's Retry).
+    func refreshWork() async
     
     func title(_ taskID: String) -> String
     
@@ -46,15 +52,6 @@ protocol MenuBarUseCase: Sendable {
     func itemsPublisher(_ taskID: String) -> AnyPublisher<[TimelineItem], Never>
     /// The latest tool call still waiting for its result, if any (`EventStreamRepository.current`).
     func current(_ taskID: String) -> TimelineItem?
-
-    // MARK: Install (settled plan, section 5)
-
-    func installStatePublisher() -> AnyPublisher<InstallState, Never>
-    var installState: InstallState { get }
-    func lastCheckMessagePublisher() -> AnyPublisher<String?, Never>
-    var lastCheckMessage: String? { get }
-    func retry() async
-    func reset()
 }
 
 @MainActor
@@ -107,19 +104,19 @@ final class MenuBarVM: MenuBarViewModel {
     private(set) var runningRows: [MenuBarRunningRowModel] = []
     private(set) var recentGroups: [ParallelGroup] = []
     private(set) var recentTasks: [TaskRowModel] = []
-    private(set) var listErrorMessage: String?
     private(set) var isConnected = false
     private(set) var connectionLine: String
     private(set) var runningCount: Int
-    /// Whether the managed runtime is ready. The new-session button is disabled and the tap ignored
-    /// while it is not, since the main window drops the request until the runtime is ready.
+    /// Whether work is available (runtime ready, no gate refusing work). The new-session button is disabled and the tap
+    /// ignored while it is not, since the main window drops the request while it gates creation.
     private(set) var canStartNewSession: Bool
     /// The popover header's subline: "harflow connected" while the list is healthy, else the
     /// repository's own connection line (connecting / error wording). No per-backend health claims.
     var headerSubline: String { isConnected ? "harflow connected" : connectionLine }
-    /// The install/update banner to show where the red list error shows today, or `nil` when
-    /// nothing needs surfacing (settled plan, section 5's precedence rules).
-    private(set) var installBannerModel: InstallBanner.Model?
+    /// The block that replaces the sections while the runtime is not ready, or `nil` once it is.
+    private(set) var runtimeCard: MenuBarRuntimeCard?
+    /// The note above the sections when listing the work failed on a ready runtime.
+    private(set) var refreshNote: MenuBarRefreshNote?
     /// The Needs you section; nil until the first complete pass. Subscribed while the popover is open.
     var needsYou: MenuBarNeedsYouSection?
     @ObservationIgnored var approvalSubmitting: Set<String> = []
@@ -149,8 +146,7 @@ final class MenuBarVM: MenuBarViewModel {
     @ObservationIgnored private var activityLines: [String: (text: String, monospaced: Bool)] = [:]
     @ObservationIgnored private var rowLeases: [String: any EventStreamLease] = [:]
     @ObservationIgnored private var rowCancellables: [String: AnyCancellable] = [:]
-    @ObservationIgnored private var installState: InstallState = .idle
-    @ObservationIgnored private var lastCheckMessage: String?
+    @ObservationIgnored private var latestRuntimeState: RuntimeSetupState
 
     // MARK: - Init
 
@@ -164,18 +160,17 @@ final class MenuBarVM: MenuBarViewModel {
         self.scheduler = scheduler
         self.connectionLine = useCase.connectionLine
         self.runningCount = useCase.runningCount
-        self.canStartNewSession = useCase.runtimeReady
+        self.canStartNewSession = useCase.workAvailable
+        self.latestRuntimeState = useCase.runtimeSetupState
+        self.runtimeCard = MenuBarRuntimeCard.card(for: useCase.runtimeSetupState)
         self.taskCountsLoading = !((useCase as? any MenuBarCountAvailabilityUseCase)?.countsComplete ?? true)
-        self.installState = useCase.installState
-        self.lastCheckMessage = useCase.lastCheckMessage
-        recomputeInstallBanner()
     }
     
     // MARK: - MenuBarViewModel Methods
     
     func didAppear() {
         // Seed readiness synchronously so the workflow poll never starts against a stale default.
-        workflowStatus?.setRuntimeReady(useCase.runtimeReady)
+        workflowStatus?.setRuntimeReady(useCase.runtimeSetupState.isReady)
         workflowStatus?.didAppear()
         subscribeIfNeeded()
         subscribeToNeedsYou()
@@ -259,21 +254,13 @@ final class MenuBarVM: MenuBarViewModel {
         routing.registerWindowOpener(opener)
     }
 
-    // MARK: - Install banner actions (settled plan, section 5)
-
-    func didTapInstallBannerPrimary() {
-        if case .failed = installState {
-            Task { [weak self] in await self?.useCase.retry() }
-        }
-    }
-
-    func didTapInstallBannerDismiss() {
-        useCase.reset()
+    func didTapRetryRefresh() {
+        Task { [useCase] in await useCase.refreshWork() }
     }
 
     // MARK: - Private Methods
 
-    /// See the type-level comment: the install-state subscriptions join the core group here — they
+    /// See the type-level comment: the runtime and work-availability subscriptions join the core group here — they
     /// are part of the same "survives the popover closing" group as `tasksPublisher`/etc., not the
     /// per-row leases `didDisappear()` tears down.
     private func subscribeIfNeeded() {
@@ -293,12 +280,23 @@ final class MenuBarVM: MenuBarViewModel {
             }
             .store(in: &cancellables)
 
-        useCase.runtimeReadyPublisher()
+        useCase.runtimeSetupStatePublisher()
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] ready in
+            .sink { [weak self] state in
                 guard let self else { return }
-                if canStartNewSession != ready { canStartNewSession = ready }
-                workflowStatus?.setRuntimeReady(ready)
+                latestRuntimeState = state
+                let card = MenuBarRuntimeCard.card(for: state)
+                if runtimeCard != card { runtimeCard = card }
+                workflowStatus?.setRuntimeReady(state.isReady)
+                recomputeRefreshNote()
+            }
+            .store(in: &cancellables)
+
+        useCase.workAvailablePublisher()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] available in
+                guard let self, canStartNewSession != available else { return }
+                canStartNewSession = available
             }
             .store(in: &cancellables)
 
@@ -319,13 +317,10 @@ final class MenuBarVM: MenuBarViewModel {
             .sink { [weak self] error in
                 guard let self else { return }
                 latestListError = error
-                listErrorMessage = error?.isManagedRuntimeUnavailable != true ? error?.message : nil
-                recomputeInstallBanner()
+                recomputeRefreshNote()
                 recompute()
             }
             .store(in: &cancellables)
-
-        subscribeToInstallState()
 
         useCase.hasListedPublisher()
             .receive(on: DispatchQueue.main)
@@ -402,57 +397,12 @@ final class MenuBarVM: MenuBarViewModel {
     }
 }
 
-// MARK: - MenuBarVM + Install banner
+// MARK: - MenuBarVM + Refresh note
 
-/// Maps `InstallState` to `InstallBanner.Model`. HfUI can't see `InstallState` (Core doesn't depend
-/// on UI), so this mapping lives here — a small, per-feature helper duplicated in `HarnessesVM`.
 extension MenuBarVM {
 
-    /// Split out of `subscribeIfNeeded()` to keep that function within the lint length budget.
-    private func subscribeToInstallState() {
-        useCase.installStatePublisher()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                guard let self else { return }
-                installState = state
-                recomputeInstallBanner()
-            }
-            .store(in: &cancellables)
-
-        useCase.lastCheckMessagePublisher()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] message in
-                guard let self else { return }
-                lastCheckMessage = message
-                recomputeInstallBanner()
-            }
-            .store(in: &cancellables)
-    }
-
-    private func recomputeInstallBanner() {
-        switch installState {
-        case .running(let stage):
-            installBannerModel = InstallBanner.Model(title: Self.runningTitle(stage), detail: Self.runningDetail(stage), isBusy: true)
-        case .failed(_, let message):
-            installBannerModel = InstallBanner.Model(
-                title: "Harflow runtime preparation failed",
-                detail: "The managed runtime is unavailable. Try again to prepare it.",
-                primaryTitle: "Try again",
-                errorText: message,
-                canDismiss: true
-            )
-        case .idle, .installed:
-            // A current tool error outranks the success banner: the plain red `listErrorMessage` shows instead.
-            if latestListError == nil, installState == .installed {
-                installBannerModel = InstallBanner.Model(
-                    title: "harflow is installed",
-                    detail: "The new install passed its checks.",
-                    canDismiss: true,
-                    footnote: "Next: register it with your harnesses in Settings → Harnesses."
-                )
-            } else {
-                installBannerModel = nil
-            }
-        }
+    private func recomputeRefreshNote() {
+        let note = MenuBarRefreshNote.note(runtimeReady: latestRuntimeState.isReady, listError: latestListError)
+        if refreshNote != note { refreshNote = note }
     }
 }

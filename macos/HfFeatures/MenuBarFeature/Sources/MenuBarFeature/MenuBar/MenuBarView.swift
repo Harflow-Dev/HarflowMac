@@ -34,11 +34,10 @@ protocol MenuBarViewModel: ViewModel {
     var runningRows: [MenuBarRunningRowModel] { get }
     var recentGroups: [ParallelGroup] { get }
     var recentTasks: [TaskRowModel] { get }
-    var listErrorMessage: String? { get }
     var isConnected: Bool { get }
     var connectionLine: String { get }
     var runningCount: Int { get }
-    /// Whether the managed runtime is ready, so a new session can be started.
+    /// Whether work is available (runtime ready, no gate refusing work), so a new session can be started.
     var canStartNewSession: Bool { get }
     var taskCountsLoading: Bool { get }
     var workflowCountsLoading: Bool { get }
@@ -48,9 +47,10 @@ protocol MenuBarViewModel: ViewModel {
     var workflowStatusError: String? { get }
     /// The header's subline under "N running".
     var headerSubline: String { get }
-    /// The install/update banner, or `nil` when nothing needs surfacing — shown where the red list
-    /// error shows today (settled plan, section 5).
-    var installBannerModel: InstallBanner.Model? { get }
+    /// The block drawn instead of the sections while the managed runtime is not ready.
+    var runtimeCard: MenuBarRuntimeCard? { get }
+    /// The note drawn above the sections when listing the work failed on a ready runtime.
+    var refreshNote: MenuBarRefreshNote? { get }
     /// The Needs you section, or nil while loading.
     var needsYou: MenuBarNeedsYouSection? { get }
     func didDecideApproval(_ row: MenuBarNeedsYouSection.Row, decision: String)
@@ -70,8 +70,7 @@ protocol MenuBarViewModel: ViewModel {
     func didTapOpenMonitor()
     func didTapNewSession()
     func didCaptureWindowOpener(_ opener: @escaping () -> Void)
-    func didTapInstallBannerPrimary()
-    func didTapInstallBannerDismiss()
+    func didTapRetryRefresh()
     /// The popover content appeared — the one reliable `MenuBarExtra` open signal. Distinct from
     /// `didAppear()`, which the always-on-screen label view also fires.
     func didPopoverOpen()
@@ -134,11 +133,15 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing16) {
-                    notices
-                    needsYou
-                    workflows
-                    running
-                    recent
+                    if let card = viewModel.runtimeCard {
+                        MenuBarRuntimeCardView(card: card) { viewModel.didTapOpenMonitor() }
+                    } else {
+                        notices
+                        needsYou
+                        workflows
+                        running
+                        recent
+                    }
                 }
                 .padding(HfRadius.Metrics.spacing16)
                 // The document probe (§6.8): inside the popover's own document, so it can only
@@ -177,22 +180,24 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
                     // `primaryText` ink like the rest of the subline.
                     Text("Counting workflows…").font(.hf(.secondary)).foregroundStyle(Color.primaryText)
                 }
-                HStack(spacing: HfRadius.Metrics.spacing5) {
-                    Circle()
-                        .fill(viewModel.isConnected ? Color.doneGreen : Color.failedRed)
-                        .frame(width: HfRadius.Metrics.sidebarConnectionDotSize, height: HfRadius.Metrics.sidebarConnectionDotSize)
-                        .accessibilityHidden(true)
-                    Text(viewModel.headerSubline).font(.hf(.secondary)).foregroundStyle(Color.primaryText).lineLimit(1)
-                    if workflowActiveSuffix {
-                        Text(
-                            "· \(viewModel.workflowActiveCount) "
-                                + (viewModel.workflowActiveCount == 1 ? "workflow" : "workflows")
-                                + " active"
-                        )
-                        .font(.hf(.secondary))
-                        .monospacedDigit()
-                        .foregroundStyle(Color.primaryText)
-                        .lineLimit(1)
+                if viewModel.runtimeCard == nil {
+                    HStack(spacing: HfRadius.Metrics.spacing5) {
+                        Circle()
+                            .fill(viewModel.isConnected ? Color.doneGreen : Color.failedRed)
+                            .frame(width: HfRadius.Metrics.sidebarConnectionDotSize, height: HfRadius.Metrics.sidebarConnectionDotSize)
+                            .accessibilityHidden(true)
+                        Text(viewModel.headerSubline).font(.hf(.secondary)).foregroundStyle(Color.primaryText).lineLimit(1)
+                        if workflowActiveSuffix {
+                            Text(
+                                "· \(viewModel.workflowActiveCount) "
+                                    + (viewModel.workflowActiveCount == 1 ? "workflow" : "workflows")
+                                    + " active"
+                            )
+                            .font(.hf(.secondary))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.primaryText)
+                            .lineLimit(1)
+                        }
                     }
                 }
             }
@@ -208,7 +213,7 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
             }
             .buttonStyle(.borderless)
             .disabled(!viewModel.canStartNewSession)
-            .help("New session")
+            .help(viewModel.canStartNewSession ? "New session" : "Finish setting up Harflow first")
             .accessibilityLabel("New session")
         }
         .padding(HfRadius.Metrics.spacing16)
@@ -255,16 +260,8 @@ struct MenuBarView<VM: MenuBarViewModel>: View {
     
     @ViewBuilder
     private var notices: some View {
-        if let bannerModel = viewModel.installBannerModel {
-            InstallBanner(
-                model: bannerModel,
-                onPrimary: { viewModel.didTapInstallBannerPrimary() },
-                onDismiss: { viewModel.didTapInstallBannerDismiss() }
-            )
-        } else if let listErrorMessage = viewModel.listErrorMessage {
-            ActivityCard {
-                Text(listErrorMessage).font(.hf(.secondary)).foregroundStyle(Color.failedRed)
-            }
+        if let note = viewModel.refreshNote {
+            MenuBarRefreshNoteView(note: note) { viewModel.didTapRetryRefresh() }
         }
     }
 
@@ -422,7 +419,6 @@ private final class MenuBarPreviewModel: MenuBarViewModel {
     var runningRows: [MenuBarRunningRowModel] = []
     var recentGroups: [ParallelGroup] = []
     var recentTasks: [TaskRowModel] = []
-    var listErrorMessage: String?
     var isConnected = true
     var connectionLine = "connected · harflow-ctl"
     var runningCount = 0
@@ -434,7 +430,8 @@ private final class MenuBarPreviewModel: MenuBarViewModel {
     var workflowAttentionCount = 0
     var workflowStatusError: String?
     var headerSubline = "harflow connected"
-    var installBannerModel: InstallBanner.Model?
+    var runtimeCard: MenuBarRuntimeCard?
+    var refreshNote: MenuBarRefreshNote?
 
     static var workflowsAndAttention: MenuBarPreviewModel {
         let model = MenuBarPreviewModel()
@@ -470,9 +467,10 @@ private final class MenuBarPreviewModel: MenuBarViewModel {
         return model
     }
 
-    static var listError: MenuBarPreviewModel {
+    static var refreshNoteShown: MenuBarPreviewModel {
         let model = MenuBarPreviewModel()
-        model.listErrorMessage = "harflow-ctl couldn't list tasks: no installation found."
+        model.isConnected = false
+        model.refreshNote = MenuBarRefreshNote(message: "harflow-ctl task-list-page exited 1 without a JSON answer.")
         return model
     }
 
@@ -486,8 +484,7 @@ private final class MenuBarPreviewModel: MenuBarViewModel {
     func didTapOpenMonitor() {}
     func didTapNewSession() {}
     func didCaptureWindowOpener(_: @escaping () -> Void) {}
-    func didTapInstallBannerPrimary() {}
-    func didTapInstallBannerDismiss() {}
+    func didTapRetryRefresh() {}
 }
 
 private func needsYouRows(_ count: Int) -> [MenuBarNeedsYouSection.Row] {
@@ -552,20 +549,30 @@ private func needsYouRows(_ count: Int) -> [MenuBarNeedsYouSection.Row] {
     MenuBarView(MenuBarPreviewModel.loading).preferredColorScheme(.dark)
 }
 
-#Preview("Menu bar list error - light") {
-    MenuBarView(MenuBarPreviewModel.listError).preferredColorScheme(.light)
+#Preview("Menu bar refresh note - light") {
+    MenuBarView(MenuBarPreviewModel.refreshNoteShown).preferredColorScheme(.light)
 }
 
-#Preview("Menu bar list error - dark") {
-    MenuBarView(MenuBarPreviewModel.listError).preferredColorScheme(.dark)
+#Preview("Menu bar refresh note - dark") {
+    MenuBarView(MenuBarPreviewModel.refreshNoteShown).preferredColorScheme(.dark)
 }
 
-#Preview("install banner - light") {
-    MenuBarView(MenuBarViewModelMock.runtimeFailed).preferredColorScheme(.light)
+#Preview("Menu bar runtime setup required - light") {
+    MenuBarView(MenuBarViewModelMock.runtimeNotReady(.setupRequired)).preferredColorScheme(.light)
 }
 
-#Preview("install banner - dark") {
-    MenuBarView(MenuBarViewModelMock.runtimeFailed).preferredColorScheme(.dark)
+#Preview("Menu bar runtime preparing - dark") {
+    MenuBarView(MenuBarViewModelMock.runtimeNotReady(.preparing)).preferredColorScheme(.dark)
+}
+
+#Preview("Menu bar runtime failed - light") {
+    MenuBarView(MenuBarViewModelMock.runtimeNotReady(.failed(message: "Package verification failed. No replacement was activated.")))
+        .preferredColorScheme(.light)
+}
+
+#Preview("Menu bar runtime failed - dark") {
+    MenuBarView(MenuBarViewModelMock.runtimeNotReady(.failed(message: "Package verification failed. No replacement was activated.")))
+        .preferredColorScheme(.dark)
 }
 
 /// The popover content as the production scene hosts it: on a native material, not a fabricated

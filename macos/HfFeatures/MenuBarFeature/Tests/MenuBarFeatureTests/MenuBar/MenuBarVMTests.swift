@@ -71,18 +71,17 @@ import Testing
         let runningCountBox: Box<Int>
         let titlesSubject: PassthroughSubject<[String: String], Never>
         let titleBox: Box<(String) -> String>
-        let installStateSubject: PassthroughSubject<InstallState, Never>
-        let lastCheckMessageSubject: PassthroughSubject<String?, Never>
-        let installStateBox: Box<InstallState>
-        let runtimeReadySubject: PassthroughSubject<Bool, Never>
-        let runtimeReadyBox: Box<Bool>
+        let runtimeStateSubject: PassthroughSubject<RuntimeSetupState, Never>
+        let runtimeStateBox: Box<RuntimeSetupState>
+        let workAvailableSubject: PassthroughSubject<Bool, Never>
+        let workAvailableBox: Box<Bool>
     }
 
     func makeSUT(
         connectionLine: String = "connecting…",
         runningCount: Int = 0,
-        installState: InstallState = .idle,
-        runtimeReady: Bool = true,
+        runtimeState: RuntimeSetupState = .ready,
+        workAvailable: Bool? = nil,
         visibility: FakeMonitorVisibility = FakeMonitorVisibility(),
         scheduler: CapturingScheduler = CapturingScheduler()
     ) -> SUT {
@@ -98,16 +97,18 @@ import Testing
         // gotcha documented elsewhere in this repo), so a test that needs the title to change
         // between two reads mutates this box instead of calling `given` again.
         let titleBox = Box<(String) -> String>({ "Task \($0.prefix(8))" })
-        let installStateSubject = PassthroughSubject<InstallState, Never>()
-        let lastCheckMessageSubject = PassthroughSubject<String?, Never>()
-        let installStateBox = Box<InstallState>(installState)
-        let runtimeReadySubject = PassthroughSubject<Bool, Never>()
-        let runtimeReadyBox = Box(runtimeReady)
+        let runtimeStateSubject = PassthroughSubject<RuntimeSetupState, Never>()
+        let runtimeStateBox = Box(runtimeState)
+        let workAvailableSubject = PassthroughSubject<Bool, Never>()
+        let workAvailableBox = Box(workAvailable ?? runtimeState.isReady)
 
         given(useCase).connectionLine.willReturn(connectionLine)
         given(useCase).runningCount.willProduce { runningCountBox.value }
-        given(useCase).runtimeReady.willProduce { runtimeReadyBox.value }
-        given(useCase).runtimeReadyPublisher().willReturn(runtimeReadySubject.eraseToAnyPublisher())
+        given(useCase).runtimeSetupState.willProduce { runtimeStateBox.value }
+        given(useCase).runtimeSetupStatePublisher().willReturn(runtimeStateSubject.eraseToAnyPublisher())
+        given(useCase).workAvailable.willProduce { workAvailableBox.value }
+        given(useCase).workAvailablePublisher().willReturn(workAvailableSubject.eraseToAnyPublisher())
+        given(useCase).refreshWork().willReturn()
         given(useCase).tasksPublisher().willReturn(tasksSubject.eraseToAnyPublisher())
         given(useCase).listErrorPublisher().willReturn(listErrorSubject.eraseToAnyPublisher())
         given(useCase).hasListedPublisher().willReturn(hasListedSubject.eraseToAnyPublisher())
@@ -118,22 +119,14 @@ import Testing
         given(routing).openWindow().willReturn()
         given(routing).registerWindowOpener(.any).willReturn()
 
-        given(useCase).installState.willProduce { installStateBox.value }
-        given(useCase).installStatePublisher().willReturn(installStateSubject.eraseToAnyPublisher())
-        given(useCase).lastCheckMessage.willReturn(nil)
-        given(useCase).lastCheckMessagePublisher().willReturn(lastCheckMessageSubject.eraseToAnyPublisher())
-        given(useCase).retry().willReturn()
-        given(useCase).reset().willReturn()
-
         let sut = MenuBarVM(useCase: useCase, routing: routing, visibility: visibility, scheduler: scheduler)
         return SUT(
             sut: sut, useCase: useCase, routing: routing, visibility: visibility, scheduler: scheduler,
             tasksSubject: tasksSubject, listErrorSubject: listErrorSubject,
             hasListedSubject: hasListedSubject, countsSubject: countsSubject, runningCountBox: runningCountBox,
             titlesSubject: titlesSubject, titleBox: titleBox,
-            installStateSubject: installStateSubject, lastCheckMessageSubject: lastCheckMessageSubject,
-            installStateBox: installStateBox,
-            runtimeReadySubject: runtimeReadySubject, runtimeReadyBox: runtimeReadyBox
+            runtimeStateSubject: runtimeStateSubject, runtimeStateBox: runtimeStateBox,
+            workAvailableSubject: workAvailableSubject, workAvailableBox: workAvailableBox
         )
     }
     
@@ -285,49 +278,9 @@ import Testing
         // then
         await waitUntil { sut.isConnected }
         #expect(sut.isConnected)
-        #expect(sut.listErrorMessage == nil)
+        #expect(sut.refreshNote == nil)
     }
     
-    @Test func givenARefusedListError_whenObserved_thenTheMessageShowsAndIsConnectedIsFalse() async {
-        // given
-        let harness = makeSUT()
-        let sut = harness.sut
-        let listErrorSubject = harness.listErrorSubject
-        let hasListedSubject = harness.hasListedSubject
-        sut.didAppear()
-        hasListedSubject.send(true)
-        let failure = ToolError.refused(code: "denied", message: "harflow-ctl refused the request.")
-
-        // when
-        listErrorSubject.send(failure)
-
-        // then
-        await waitUntil { sut.listErrorMessage != nil }
-        #expect(sut.listErrorMessage == failure.message)
-        #expect(sut.isConnected == false)
-        #expect(sut.installBannerModel == nil)
-    }
-
-    @Test func givenAnUnsupportedCommandListError_whenObserved_thenThePlainMessageShowsAndNoBanner() async {
-        // given
-        let harness = makeSUT()
-        let sut = harness.sut
-        let listErrorSubject = harness.listErrorSubject
-        let hasListedSubject = harness.hasListedSubject
-        sut.didAppear()
-        hasListedSubject.send(true)
-        let failure = ToolError.unsupportedCommand(tool: "harflow-ctl", command: "task-list-page", detail: "unrecognized")
-
-        // when
-        listErrorSubject.send(failure)
-
-        // then
-        await waitUntil { sut.listErrorMessage != nil }
-        #expect(sut.listErrorMessage == failure.message)
-        #expect(sut.isConnected == false)
-        #expect(sut.installBannerModel == nil)
-    }
-
     // MARK: - Selection
     
     @Test func givenAMenuBarSelection_whenOpened_thenItSelectsAndOpensTheWindow() {
