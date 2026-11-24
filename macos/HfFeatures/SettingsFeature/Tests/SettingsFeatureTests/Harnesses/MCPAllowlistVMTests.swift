@@ -261,6 +261,27 @@ import Testing
         #expect(vm.fieldEnabled)
     }
 
+    @Test func givenUnsupportedCommandThenSuccess_whenRefreshed_thenMissingFeatureSentenceClears() async {
+        // given
+        let useCase = MockMCPAllowlistUseCase()
+        var failing = true
+        given(useCase).request(backend: .any, allow: .value(nil), remove: .value(nil)).willProduce { _, _, _ in
+            if failing { throw ToolError.unsupportedCommand(tool: "harflow-ctl", command: "mcp-allowlist", detail: "usage") }
+            return ["supported": .bool(true), "entries": .array([.string("harflow/*")])]
+        }
+        let vm = MCPAllowlistVM(backend: "claude", title: "Claude Code", useCase: useCase)
+        await vm.load()
+        #expect(vm.missingFeatureSentence != nil)
+        failing = false
+        // when
+        await vm.load()
+        // then
+        #expect(vm.missingFeatureSentence == nil)
+        #expect(vm.errorMessage == nil)
+        #expect(vm.entries == ["harflow/*"])
+        #expect(vm.fieldEnabled)
+    }
+
     @Test func givenFirstReadNotAnswered_whenEntryTyped_thenAddStaysDisabled() {
         // given
         let vm = MCPAllowlistVM(backend: "claude", title: "Claude Code", useCase: MockMCPAllowlistUseCase())

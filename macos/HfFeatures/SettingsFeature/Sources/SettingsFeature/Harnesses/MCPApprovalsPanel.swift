@@ -103,7 +103,8 @@ struct MCPApprovalsPanel<VM: MCPAllowlistViewModel>: View {
         }
         .padding(.vertical, HfRadius.Metrics.spacing8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .task { await viewModel.load() }
+        // Unstructured, so a List row scrolling off mid-read cannot cancel the read and leave the panel blank.
+        .onAppear { Task { await viewModel.load() } }
         .publishViewEvent(from: viewModel, to: viewEvent)
     }
 }
