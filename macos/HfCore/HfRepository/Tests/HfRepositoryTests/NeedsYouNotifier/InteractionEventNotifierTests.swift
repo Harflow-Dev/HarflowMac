@@ -6,25 +6,108 @@ import MonitorCore
 import Testing
 
 @Suite struct InteractionEventNotifierTests {
-    private func event(_ id: String = "question-1", state: String = "answered", kind: String = "question",
-                       responder: String = "caller", at timestamp: Double = 200) -> InteractionNotificationEvent {
-        InteractionNotificationEvent([
+    private func event(_ id: String = "question-1", state: String = "pending", kind: String = "question",
+                       responder: String = "caller", at timestamp: Double = 200, task: String? = nil,
+                       interaction: String? = "point-1") -> InteractionNotificationEvent {
+        var raw: [String: JSONValue] = [
             "event_id": .string(id), "state": .string(state), "kind": .string(kind),
             "title": .string("Release checklist"), "answer": .string("Use staging."),
             "question": .string("Which target?"), "answered_by": .string(responder),
-            "occurred_at": .number(timestamp), "workflow_run_id": .string("run12345")
-        ])!
+            "occurred_at": .number(timestamp), "workflow_run_id": .string("run12345"),
+            "source_workflow_run_id": .string("run67890")
+        ]
+        if let task { raw["task_id"] = .string(task) }
+        if let interaction { raw["interaction_id"] = .string(interaction) }
+        return InteractionNotificationEvent(raw)!
     }
 
-    @Test func givenCallerAndHarflowWinners_whenBuildingBanners_thenWinningTextAndDestinationAreRetained() {
-        // given / when
-        let caller = InteractionEventNotifier.content(event())
-        let monitor = InteractionEventNotifier.content(event(responder: "monitor"))
+    private func sut(center: GatedCenter, canNotify: Bool = true, needsYou: Bool = true) -> InteractionEventNotifier {
+        let settings = MockSettingsRepository()
+        given(settings).notifyOnNeedsYou.willReturn(needsYou)
+        given(settings).notifyOnFinish.willReturn(needsYou)
+        return InteractionEventNotifier(
+            tooling: NullToolEnvironmentRepository(), install: NullInstallRepository(), settings: settings,
+            scheduler: NullScheduling(), center: center, canNotify: { canNotify }
+        )
+    }
+
+    @Test func givenAnsweredEvent_whenDelivered_thenNothingIsPostedAndThePendingIdentifierIsRemoved() async {
+        // given
+        let center = GatedCenter()
+        let notifier = sut(center: center)
+        let identifier = "interaction:run12345|run67890||point-1"
+        // when
+        let handled = await notifier.deliver(event("answer-1", state: "answered"), isCurrent: { true })
         // then
-        #expect(caller.title == "Answered by the caller")
-        #expect(monitor.title == "Answered in Harflow")
-        #expect(caller.body == "Use staging.")
-        #expect(caller.userInfo["workflow_run_id"] as? String == "run12345")
+        #expect(handled)
+        #expect(center.delivered.isEmpty)
+        #expect(center.removedDelivered == [identifier])
+        #expect(center.removedPending == [identifier])
+    }
+
+    @Test func givenNotificationsOff_whenAnswered_thenRemovalStillHappens() async {
+        // given
+        let center = GatedCenter()
+        let notifier = sut(center: center, needsYou: false)
+        // when
+        _ = await notifier.deliver(event("answer-1", state: "answered"), isCurrent: { true })
+        // then
+        #expect(center.removedDelivered == ["interaction:run12345|run67890||point-1"])
+    }
+
+    @Test func givenNoAppBundle_whenAnswered_thenTheCenterIsNeverTouched() async {
+        // given
+        let center = GatedCenter()
+        let notifier = sut(center: center, canNotify: false)
+        // when
+        _ = await notifier.deliver(event("answer-1", state: "answered"), isCurrent: { true })
+        let permission = await notifier.permission()
+        // then
+        #expect(center.removedDelivered.isEmpty)
+        #expect(center.removedPending.isEmpty)
+        #expect(permission == nil)
+    }
+
+    @Test func givenAnApp_whenReadingPermission_thenTheCentreStatusIsReturned() async {
+        // given
+        let center = GatedCenter()
+        center.setStatus(.denied)
+        // when
+        let permission = await sut(center: center).permission()
+        // then
+        #expect(permission == .denied)
+    }
+
+    @Test func givenPendingAndAnsweredRows_whenBuildingIdentifiers_thenTheyShareOneKeyAndTasksKeepTheirEventID() {
+        // given / when / then
+        #expect(InteractionEventNotifier.identifier(event("p")) == InteractionEventNotifier.identifier(event("a", state: "answered")))
+        #expect(InteractionEventNotifier.identifier(event("p", task: "task1")) == "interaction:run12345|run67890|task1|point-1")
+        #expect(InteractionEventNotifier.identifier(event("task:t1:completed", state: "completed", kind: "task")) == "interaction-task:t1:completed")
+        #expect(InteractionEventNotifier.identifier(event("old", interaction: nil)) == "interaction-old")
+    }
+
+    @Test func givenQuestionApprovalAndRecovery_whenBuildingBanners_thenTitlesAndTypedDestinationAreRetained() {
+        // given / when
+        let question = InteractionEventNotifier.content(event())
+        let approval = InteractionEventNotifier.content(event(kind: "approval", task: "task1"))
+        // then
+        #expect(question.title == "Question: Release checklist")
+        #expect(question.body == "Which target?")
+        #expect(question.userInfo as? [String: String] == [
+            "needs_you_kind": "question", "workflow_run_id": "run12345", "interaction_id": "point-1"
+        ])
+        #expect(approval.title == "Approval: Release checklist")
+        #expect(approval.userInfo["task_id"] as? String == "task1")
+        #expect(InteractionEventNotifier.content(event(kind: "recovery")).title == "Recovery: Release checklist")
+    }
+
+    @Test func givenATaskEventWithARun_whenBuildingContent_thenTaskIDIsTheDestination() {
+        // given
+        let finished = event("task:t1:completed", state: "completed", kind: "task", task: "t1", interaction: "t1")
+        // when
+        let content = InteractionEventNotifier.content(finished)
+        // then
+        #expect(content.userInfo as? [String: String] == ["task_id": "t1"])
     }
 
     @Test func givenCompletedAndFailedTasks_whenBuildingBanners_thenBothTerminalOutcomesNotify() {
@@ -96,8 +179,8 @@ import Testing
     }
 
     private func page(eventID: String, at timestamp: Double) -> String {
-        let row = "{\"event_id\":\"\(eventID)\",\"state\":\"answered\",\"kind\":\"question\",\"title\":\"Release checklist\","
-            + "\"answer\":\"Use staging.\",\"answered_by\":\"caller\",\"occurred_at\":\(timestamp)}"
+        let row = "{\"event_id\":\"\(eventID)\",\"state\":\"pending\",\"kind\":\"question\",\"title\":\"Release checklist\","
+            + "\"question\":\"Which target?\",\"monitor_available\":true,\"occurred_at\":\(timestamp)}"
         return "{\"product\":\"harflow\",\"format\":\"harflow.ctl\",\"v\":1,\"product_version\":\"0.0.1\","
             + "\"result\":{\"events\":[\(row)],\"cycle_complete\":true,\"history_incomplete\":false}}"
     }
@@ -172,5 +255,101 @@ import Testing
         // then
         await waitUntil { center.delivered == ["interaction-question-1"] }
         #expect(center.delivered == ["interaction-question-1"])
+    }
+
+    // MARK: - Feed availability and answered rows
+
+    private func answeredAndPendingRunner(_ rows: [String]) -> StubProcessRunner {
+        let info = versionInfo(capabilities: baseCapabilities + ["interaction-events.v1"])
+        let body = "{\"product\":\"harflow\",\"format\":\"harflow.ctl\",\"v\":1,\"product_version\":\"0.0.1\","
+            + "\"result\":{\"events\":[\(rows.joined(separator: ","))],\"cycle_complete\":true,\"history_incomplete\":false}}"
+        return StubProcessRunner { call in
+            call.arguments == ["version-info", "--json"] ? .success(stdout(info)) : .success(stdout(body))
+        }
+    }
+
+    private func row(_ id: String, state: String, at timestamp: Double) -> String {
+        "{\"event_id\":\"\(id)\",\"state\":\"\(state)\",\"kind\":\"question\",\"title\":\"Release checklist\","
+            + "\"question\":\"Which target?\",\"answer\":\"Use staging.\",\"answered_by\":\"caller\",\"monitor_available\":true,"
+            + "\"workflow_run_id\":\"run1\",\"source_workflow_run_id\":\"run1\",\"interaction_id\":\"p1\",\"occurred_at\":\(timestamp)}"
+    }
+
+    @Test func givenPendingAndAnsweredInOnePage_whenProcessed_thenNothingIsPosted() async {
+        // given
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let tooling = MockToolEnvironmentRepository()
+        let stub = answeredAndPendingRunner([
+            row("e:0:pending", state: "pending", at: 1_758_000_100), row("e:1:answered", state: "answered", at: 1_758_000_200)
+        ])
+        given(tooling).ctl().willReturn(.success(client(stub)))
+        let scheduler = CapturingScheduler()
+        let center = GatedCenter()
+        let sut = notifier(tooling: tooling, scheduler: scheduler, center: center, defaults: scratch.defaults)
+        // when
+        sut.start()
+        await waitUntil { scheduler.oneShotCount(interval: 3) == 1 }
+        // then
+        #expect(center.delivered.isEmpty)
+        #expect(center.removedDelivered == ["interaction:run1|run1||p1"])
+    }
+
+    @Test func givenUnsupportedCommand_whenPolled_thenFeedIsUnavailable() async {
+        // given
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let tooling = MockToolEnvironmentRepository()
+        given(tooling).ctl().willReturn(.success(client(runner(capabilities: baseCapabilities))))
+        let scheduler = CapturingScheduler()
+        let sut = notifier(tooling: tooling, scheduler: scheduler, center: GatedCenter(), defaults: scratch.defaults)
+        #expect(sut.feedAvailability == .unknown)
+        // when
+        sut.start()
+        await waitUntil { scheduler.oneShotCount(interval: 3) == 1 }
+        // then
+        #expect(sut.feedAvailability == .unavailable)
+    }
+
+    @Test func givenASuccessfulPage_whenPolled_thenFeedIsAvailable() async {
+        // given
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let tooling = MockToolEnvironmentRepository()
+        given(tooling).ctl().willReturn(.success(client(answeredAndPendingRunner([]))))
+        let scheduler = CapturingScheduler()
+        let sut = notifier(tooling: tooling, scheduler: scheduler, center: GatedCenter(), defaults: scratch.defaults)
+        // when
+        sut.start()
+        await waitUntil { sut.feedAvailability == .available }
+        // then
+        #expect(sut.feedAvailability == .available)
+    }
+
+    @Test func givenAnAnsweredRowRecordedEarlier_whenItsPendingRowArrivesAlone_thenNothingIsPosted() async {
+        // given
+        let scratch = ScratchDefaults()
+        defer { scratch.remove() }
+        let pages = LockedBox<[String]>([row("e:1:answered", state: "answered", at: 1_758_000_200)])
+        let info = versionInfo(capabilities: baseCapabilities + ["interaction-events.v1"])
+        let stub = StubProcessRunner { call in
+            if call.arguments == ["version-info", "--json"] { return .success(stdout(info)) }
+            let rows = pages.value.joined(separator: ",")
+            return .success(stdout("{\"product\":\"harflow\",\"format\":\"harflow.ctl\",\"v\":1,\"product_version\":\"0.0.1\","
+                + "\"result\":{\"events\":[\(rows)],\"cycle_complete\":true,\"history_incomplete\":false}}"))
+        }
+        let tooling = MockToolEnvironmentRepository()
+        given(tooling).ctl().willReturn(.success(client(stub)))
+        let scheduler = CapturingScheduler()
+        let center = GatedCenter()
+        let sut = notifier(tooling: tooling, scheduler: scheduler, center: center, defaults: scratch.defaults)
+        sut.start()
+        await waitUntil { scheduler.oneShotCount(interval: 3) == 1 }
+        // when
+        pages.mutate { $0 = [row("e:0:pending", state: "pending", at: 1_758_000_100)] }
+        scheduler.fireOneShot(interval: 3)
+        await waitUntil { stub.calls.filter { $0.arguments.first == "interaction-events" }.count == 2 }
+        await waitUntil { scheduler.oneShotCount(interval: 3) == 1 }
+        // then
+        #expect(center.delivered.isEmpty)
     }
 }

@@ -12,7 +12,11 @@ public struct InteractionNotificationEvent: Sendable, Equatable {
     public let answeredBy: String?
     public let occurredAt: Double
     public let workflowRunID: String?
+    /// The run that raised the request: the root, or a descendant of it. Absent on older engines.
+    public let sourceWorkflowRunID: String?
     public let taskID: String?
+    /// Shared by a request's pending and answered rows, so an answer can find the notification to remove.
+    public let interactionID: String?
     public let monitorAvailable: Bool
 
     public init?(_ raw: [String: JSONValue]) {
@@ -31,8 +35,15 @@ public struct InteractionNotificationEvent: Sendable, Equatable {
         self.answeredBy = responder
         self.occurredAt = timestamp
         self.workflowRunID = raw["workflow_run_id"]?.stringValue
+        self.sourceWorkflowRunID = Self.bounded(raw["source_workflow_run_id"])
+        self.interactionID = Self.bounded(raw["interaction_id"])
         self.taskID = raw["task_id"]?.stringValue
         self.monitorAvailable = raw["monitor_available"]?.boolValue ?? (kind == "task")
+    }
+
+    private static func bounded(_ value: JSONValue?) -> String? {
+        guard let text = value?.stringValue, !text.isEmpty, text.count <= 1024 else { return nil }
+        return text
     }
 }
 

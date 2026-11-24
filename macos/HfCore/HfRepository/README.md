@@ -56,7 +56,7 @@ runtime provenance, not authenticated caller identity or approval decision autho
 engine refusals and drafts remain explicit; answers are never replayed automatically. This does
 not add workflow-wide unknown-outcome retention or an uncertainty recovery interface.
 
-`InteractionEventNotifier` consumes the capability-gated public interaction feed for individual macOS pending, answered, completed and failed banners. It persists app-owned event deduplication per selected state root. An engine without the capability posts no notifications; the poll keeps its 3 s cadence and resumes if the selected runtime gains the capability. It never writes engine records.
+`InteractionEventNotifier` consumes the capability-gated public interaction feed for individual macOS pending, completed and failed banners; an answered row posts nothing and removes the request's pending banner. It persists app-owned event deduplication per selected state root. An engine without the capability posts no notifications; the poll keeps its 3 s cadence and resumes if the selected runtime gains the capability. It never writes engine records.
 
 ## Task-list observation
 

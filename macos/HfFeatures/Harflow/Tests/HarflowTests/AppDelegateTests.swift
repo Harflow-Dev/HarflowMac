@@ -15,8 +15,10 @@ import Foundation
 @testable import Harflow
 import HfCommon
 import HfCommonTestMock
+import HfRepository
 import Mockable
 import MonitorCore
+import SwiftEnvironment
 import Testing
 @preconcurrency import UserNotifications
 
@@ -354,6 +356,33 @@ import Testing
 
         // when
         sut.handleNotificationClick(userInfo: ["needs_you_item": "input:w1:d1"])
+
+        // then
+        #expect(handledPaths.value == [MonitorDestination.needsYou(itemID: "input:w1:d1").pathId, MonitorDestination.openWindow.pathId])
+    }
+
+    @Test func givenAQuestionNotification_whenClicked_thenNeedsYouItemAndWindowOpen() {
+        // given
+        let (sut, _, _, _) = makeSUT()
+        let coordinator = MockCoordinator()
+        let handledPaths = LockedBox<[String]>([])
+        given(coordinator).handle(path: .any).willProduce { path in
+            if let destination = path as? MonitorDestination { handledPaths.value.append(destination.pathId) }
+        }
+        sut.coordinator = coordinator
+        let item = NeedsYouItem(
+            id: "input:w1:d1", kind: .question, rootRunID: "w1", runTitle: "Run", text: "Which target?",
+            ownership: .init(owner: "monitor", callerEnded: false, engineNote: "", handover: nil),
+            startedBy: "Mac app", decisionID: "d1"
+        )
+        let repository = MockNeedsYouRepository()
+        given(repository).snapshot.willReturn(NeedsYouSnapshot(phase: .ready, items: [item]))
+        let previous = GlobalValues.needsYouRepository
+        GlobalValues.environment(\.needsYouRepository, repository)
+        defer { GlobalValues.environment(\.needsYouRepository, previous) }
+
+        // when
+        sut.handleNotificationClick(userInfo: ["needs_you_kind": "question", "workflow_run_id": "w1", "interaction_id": "d1"])
 
         // then
         #expect(handledPaths.value == [MonitorDestination.needsYou(itemID: "input:w1:d1").pathId, MonitorDestination.openWindow.pathId])

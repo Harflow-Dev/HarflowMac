@@ -329,18 +329,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         // Always shows the window, regardless of `openWindowOnStart` (F4-32) — unlike `handle(url:)`,
         // which is conditional. `.openWindow` reaches `AppCoordinator.handle(path:)`'s own
         // `case .openWindow:` unconditionally.
-        if let id = userInfo["task_id"] as? String, MonitorURL.isValidTaskID(id) {
-            coordinator?.handle(path: MonitorDestination.task(id))
-            coordinator?.handle(path: MonitorDestination.openWindow)
-        } else if let run = userInfo["workflow_run_id"] as? String, MonitorURL.isValidTaskID(run) {
-            coordinator?.handle(path: MonitorDestination.workflowRun(run))
-            coordinator?.handle(path: MonitorDestination.openWindow)
-        } else if let item = userInfo["needs_you_item"] as? String, Self.isValidNeedsYouItemID(item) {
-            // No notifier produces this key any more (the legacy Needs you notifier was removed); the route stays so a
-            // notification delivered earlier still opens its item. How a click reaches Needs you is decided by N1.
-            coordinator?.handle(path: MonitorDestination.needsYou(itemID: item))
-            coordinator?.handle(path: MonitorDestination.openWindow)
+        let route = NeedsYouNotificationRoute.destination(userInfo: userInfo, snapshot: GlobalValues.needsYouRepository.snapshot)
+        let destination: MonitorDestination? = switch route {
+        case .task(let id) where MonitorURL.isValidTaskID(id): .task(id)
+        case .workflowRun(let run) where MonitorURL.isValidTaskID(run): .workflowRun(run)
+        // Items from the snapshot are trusted; a legacy `needs_you_item` is validated. The list needs no id.
+        case .needsYou(let item?) where Self.isValidNeedsYouItemID(item): .needsYou(itemID: item)
+        case .needsYou(nil): .needsYou(itemID: nil)
+        default: nil
         }
+        guard let destination else { return }
+        coordinator?.handle(path: destination)
+        coordinator?.handle(path: MonitorDestination.openWindow)
     }
 
     /// Needs you item ids are `input:`, `attention:` or `approval:` followed by engine identifiers.

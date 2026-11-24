@@ -35,6 +35,16 @@ Both are temporary. The 0.0.14 bundle still has no canonical `contracts/v1/ctl-b
 specimen (it adds the `ctl-backend-models-*` specimens for `backend-models.v1` only), so both recorded
 files stay until a later engine release supplies one.
 
+## Optional fields decoded beyond the fixtures
+
+`InteractionNotificationEvent` also reads the optional `interaction_id` and `source_workflow_run_id`
+of an `interaction-events` row. The vendored fixtures do not exercise them; the evidence is the engine
+source at `v0.0.14`, `src/harflow_mcp/interaction_events.py:75,90-91,129-130,188-189,271-274`, where pending and
+answered rows of one request share `interaction_id`, `workflow_run_id` (the root), `source_workflow_run_id`
+and `task_id`. The decode is additive and optional, a row without them still decodes, and no contract,
+version or capability gate changed. `InteractionNotificationEventDecodingTests` decodes inline raw rows
+with the fields present and absent.
+
 ## Compatibility evidence
 
 The vendored manifest supplies expected format/product version, required

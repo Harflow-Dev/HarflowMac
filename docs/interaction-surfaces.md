@@ -59,11 +59,27 @@ Non-question workflow recovery requires `workflow-attention-checkpoints.v1` and 
 
 On engines advertising `interaction-events.v1`, Harflow reads a bounded durable event
 feed and posts an individual Notification Center banner for each pending question,
-approval, recovery request and accepted answer, plus each observed completed or failed
-task. Answer banners name the responder and include a bounded winning-answer excerpt.
-Clicking a workflow banner opens its root run; a standalone-task banner opens the task.
+approval and recovery request, plus each observed completed or failed task. There are
+no action buttons. A request answered anywhere, in Harflow or by the caller, removes its
+pending banner, delivered or still queued, and nothing replaces it: no "Answered" banner
+is posted. A pending row whose answered row arrives in the same page is never posted. The
+banner is matched through the engine's `interaction_id` and run ids, which the pending
+and answered rows share, so the removal ignores the two notification switches. Banners
+posted before this behaviour carry another identifier and stay until dismissed.
+
+Clicking a finished or failed task opens the task. Clicking an approval, question or
+recovery opens its Needs you item: a question by root run and decision, an approval by
+task and request, a recovery by root run alone (the engine's `interaction_id` for a
+recovery is a point key, not the checkpoint id). When the request is no longer in Needs
+you, the click opens the Needs you list. Banners from earlier versions keep their
+targets (a run, a task or a Needs you item). A click always shows the window.
 Native notification permission and the existing Needs you / task-finish preferences
 still apply. Foreground delivery uses banners and sound.
+
+The notifier reports whether the selected runtime serves the feed (unknown until a page
+answers, available, or unavailable when the command is unsupported) and, when the app
+runs from a bundle, the notification permission. Neither is read through the
+notification centre when the app cannot post notifications.
 
 App-owned delivery IDs are persisted per selected engine state root, independently of
 engine storage. Initial historical episodes are baselined, retained newer episodes
