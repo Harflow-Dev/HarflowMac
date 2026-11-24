@@ -88,7 +88,7 @@ final class HostedListingUseCase: NewSessionUseCase {
 /// button, and (when `HARFLOW_MODEL_PICKER_CAPTURE_DIR` is set) light and dark captures at both approved
 /// sizes. Activation of the AppKit host can fail while another app is frontmost.
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .accessibilityEnhancedUI)
 struct ModelPickerStatesHostedTests {
 
     // MARK: - Scenarios
