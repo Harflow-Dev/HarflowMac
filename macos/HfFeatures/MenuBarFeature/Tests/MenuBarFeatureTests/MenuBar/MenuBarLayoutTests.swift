@@ -113,7 +113,7 @@ import Testing
         // then
         let labels = try ["Workflows", "Running", "Recent"].map { try #require(fixture.element($0)) }
         let frames = try labels.map { element in
-            try #require(fixture.windowFrame(element))
+            try #require(fixture.screenFrame(element))
         }
         #expect(frames[0].maxY > frames[1].maxY)
         #expect(frames[1].maxY > frames[2].maxY)
@@ -208,9 +208,9 @@ import Testing
         // then — long count text must not displace either existing footer action.
         let newSession = try #require(fixture.element("New session"))
         let openMonitor = try #require(fixture.element("Open Harflow"))
-        let contentFrame = try #require(fixture.contentWindowFrame)
-        let newSessionFrame = try #require(fixture.nativeFrame(label: "New session") ?? fixture.screenFrame(newSession))
-        let openMonitorFrame = try #require(fixture.windowFrame(openMonitor))
+        let contentFrame = try #require(fixture.contentScreenFrame)
+        let newSessionFrame = try #require(fixture.screenFrame(newSession))
+        let openMonitorFrame = try #require(fixture.screenFrame(openMonitor))
         #expect(contentFrame.contains(newSessionFrame))
         #expect(contentFrame.contains(openMonitorFrame))
         let event = try #require(NSEvent.keyEvent(
@@ -236,7 +236,7 @@ import Testing
         // then
         #expect(fixture.matching("Workflows").count == 1)
         let label = try #require(fixture.element("Workflows"))
-        let labelFrame = try #require(fixture.windowFrame(label))
+        let labelFrame = try #require(fixture.screenFrame(label))
         let errorFrame = try #require(fixture.firstFrame(containing: "Workflow status unavailable"))
         #expect(labelFrame.maxY > errorFrame.maxY)
     }
@@ -262,7 +262,7 @@ import Testing
         #expect(fixture.containsText("Workflow status unavailable"))
         let noticeFrame = try #require(fixture.firstFrame(containing: "without a JSON answer"))
         let workflowsElement = try #require(fixture.element("Workflows"))
-        let workflowsFrame = try #require(fixture.windowFrame(workflowsElement))
+        let workflowsFrame = try #require(fixture.screenFrame(workflowsElement))
         #expect(noticeFrame.maxY > workflowsFrame.maxY)
         let retry = try #require(fixture.element("Retry"))
         #expect(fixture.press(retry))
@@ -312,10 +312,10 @@ import Testing
 
     var descendants: [NSView] { views(controller.view) }
 
-    /// The real native content bounds in the same window-local coordinate space as `windowFrame`.
-    var contentWindowFrame: CGRect? {
+    /// The content view's bounds in screen coordinates, the space `screenFrame` uses.
+    var contentScreenFrame: CGRect? {
         guard let contentView = window.contentView else { return nil }
-        return contentView.bounds
+        return window.convertToScreen(contentView.convert(contentView.bounds, to: nil))
     }
 
     func settle(_ predicate: @escaping () -> Bool) async {
@@ -359,46 +359,23 @@ import Testing
                 string(object, key)?.contains(fragment) == true
             }
         }
-.flatMap(windowFrame)
+.flatMap(screenFrame)
     }
 
-    /// Converts native NSViews from screen coordinates; SwiftUI AX aggregates already expose
-    /// their window-local frame through the public selector fallback.
-    func windowFrame(_ object: NSObject) -> CGRect? {
-        guard let contentView = window.contentView else { return nil }
+    /// The element's frame in screen coordinates, shared by native views and accessibility elements.
+    func screenFrame(_ object: NSObject) -> CGRect? {
         if let view = object as? NSView {
-            return contentView.convert(view.convert(view.bounds, to: nil), from: nil)
+            guard let viewWindow = view.window else { return nil }
+            return viewWindow.convertToScreen(view.convert(view.bounds, to: nil))
         }
         if let accessible = object as? any NSAccessibilityProtocol {
-            return contentView.convert(accessible.accessibilityFrame(), from: nil)
+            return accessible.accessibilityFrame()
         }
         let selector = NSSelectorFromString("accessibilityFrame")
         guard object.responds(to: selector), let method = object.method(for: selector) else { return nil }
         typealias Frame = @convention(c) (AnyObject, Selector) -> CGRect
         let implementation = unsafeBitCast(method, to: Frame.self)
         return implementation(object, selector)
-    }
-
-    /// Resolves a real native control when SwiftUI exposes one, avoiding proxy coordinate
-    /// ambiguity for the circular New session target.
-    func nativeFrame(label: String) -> CGRect? {
-        guard let contentView = window.contentView else { return nil }
-        return descendants.compactMap { $0 as? NSButton }
-.first { button in
-            string(button, "accessibilityLabel") == label || string(button, "accessibilityTitle") == label
-        }
-.map { contentView.convert($0.convert($0.bounds, to: nil), from: nil) }
-    }
-
-    /// Converts the documented screen-space frame of an AX proxy into content coordinates.
-    func screenFrame(_ object: NSObject) -> CGRect? {
-        guard let contentView = window.contentView else { return nil }
-        let selector = NSSelectorFromString("accessibilityFrame")
-        guard object.responds(to: selector), let method = object.method(for: selector) else { return nil }
-        typealias Frame = @convention(c) (AnyObject, Selector) -> CGRect
-        let implementation = unsafeBitCast(method, to: Frame.self)
-        let windowFrame = window.convertFromScreen(implementation(object, selector))
-        return contentView.convert(windowFrame, from: nil)
     }
 
     func press(_ object: NSObject) -> Bool {
