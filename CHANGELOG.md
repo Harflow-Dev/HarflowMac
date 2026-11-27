@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.0
+
 - Indent nested Markdown list items in agent messages and summaries by 20 points per level (HarflowDesign `be5c743`, `.hd-msg-agent ul`), with disc, circle and square bullets by depth. Nesting follows the item's indentation (2 or 4 spaces, or tabs) up to four levels; ordered markers stay as written, and bullet glyphs are hidden from VoiceOver.
 
 - Cut the idle CPU of the main window while something is loading or running, and while it is closed. The loading shimmer, the running spinner (in task rows, badges, lanes, the top bar and loading labels) and the running workflow node outline now animate in Core Animation instead of 30 Hz SwiftUI clocks that made the window re-measure itself every frame; their look, timing and Reduce Motion behaviour are unchanged, and the spinner still reads "Running" to VoiceOver unless its caller hides it. The running clocks and "ago" labels in the main window's own views stop while the window is hidden and show the current time again as soon as it is shown. Clocks inside sidebar and feed rows keep ticking while hidden. Under Reduce Motion a loading placeholder is now drawn by a pulsing layer of the same tone, clipped to the placeholder's rounded corners, instead of fading the SwiftUI shape, and a skeleton block under Reduce Motion looks the same on screen. Host bitmaps taken with `cacheDisplay`, including the review capture bitmaps, no longer show spinners or skeleton fills, because Core Animation layers are not rasterised there; the exact owned window captures still do.

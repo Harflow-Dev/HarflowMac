@@ -24,7 +24,7 @@ ASSET_MODULE_SPEC.loader.exec_module(release_assets)
 
 
 def test_source_accepts_current_plist_and_runtime_pair():
-    assert release.validate_source(ROOT) == ("0.0.9", "0.0.14")
+    assert release.validate_source(ROOT) == ("0.1.0", "0.0.14")
 
 
 def test_source_rejects_tag_mismatch_before_git_lookup():

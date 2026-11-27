@@ -148,7 +148,7 @@ def test_every_app_configuration_preserves_identity_and_single_binary(project):
             plist = plistlib.load(stream)
         assert plist["CFBundleIdentifier"] == "dev.harflow.mac"
         assert plist["CFBundleExecutable"] == "Harflow"
-        assert plist["CFBundleShortVersionString"] == "0.0.9"
+        assert plist["CFBundleShortVersionString"] == "0.1.0"
         assert plist["CFBundleVersion"] == "1"
         assert plist["CFBundleURLTypes"][0]["CFBundleURLSchemes"] == ["harflow"]
     scheme = ET.parse(PROJECT / "xcshareddata/xcschemes/HarflowHost.xcscheme")
