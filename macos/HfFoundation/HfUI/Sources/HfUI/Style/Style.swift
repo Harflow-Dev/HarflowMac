@@ -279,35 +279,26 @@ public struct MarkdownText: View {
     }
 
     public enum Block: Hashable, Sendable {
-        case heading(String), bullet(String), code(String), paragraph(String)
+        case heading(String), code(String), paragraph(String)
+        /// A bullet item at a nesting `depth` (0 for a top-level item).
+        case bullet(String, depth: Int = 0)
         /// A pipe table: the header row first, then the body rows (the `|---|` separator dropped).
         case table([[String]])
-        /// A numbered item: its marker as written ("1." / "2)") and its text.
-        case numbered(String, String)
+        /// A numbered item: its marker as written ("1." / "2)"), its text and its nesting `depth`.
+        case numbered(String, String, depth: Int = 0)
         case quote(String)
         case rule
     }
 
     public nonisolated static func blocks(_ text: String) -> [Block] {
         var blocks: [Block] = []
+        var nesting = MarkdownListNesting()
         var paragraph: [String] = []
         var code: [String]?
         var tableLines: [String] = []
         func flushTable() {
             guard !tableLines.isEmpty else { return }
-            // Only a header row followed by a `|---|` separator is a table; other pipe lines are prose.
-            // …and its separator must have exactly the header's column count, which fixes the width.
-            let header = tableCells(tableLines[0])
-            if tableLines.count >= 2, isTableSeparator(tableLines[1]), tableCells(tableLines[1]).count == header.count {
-                let body = tableLines.dropFirst(2).map { row -> [String] in
-                    let cells = tableCells(row)
-                    return (0 ..< header.count).map { $0 < cells.count ? cells[$0] : "" }
-                }
-                blocks.append(.table([header] + body))
-            } else {
-                // A malformed table keeps its layout as a code block rather than raw pipes in prose.
-                blocks.append(.code(tableLines.joined(separator: "\n")))
-            }
+            blocks.append(tableBlock(tableLines))
             tableLines = []
         }
         func flush() {
@@ -315,9 +306,11 @@ public struct MarkdownText: View {
             paragraph = []
             flushTable()
         }
-        for raw in text.components(separatedBy: "\n") {
+        for raw in sourceLines(text) {
             let line = raw.trimmingCharacters(in: .whitespaces)
+            let column = MarkdownListNesting.indentColumns(raw)
             if line.hasPrefix("```") {
+                nesting.noteNonListLine(column: column)
                 if let lines = code {
                     blocks.append(.code(lines.joined(separator: "\n")))
                     code = nil
@@ -329,6 +322,7 @@ public struct MarkdownText: View {
             }
             if code != nil { code?.append(raw); continue }
             if line.isEmpty { flush(); continue }
+            let listBlock = nestedLineBlock(line, column: column, nesting: &nesting)
             if line.hasPrefix("|"), line.hasSuffix("|"), line.count > 1 {
                 if !paragraph.isEmpty { blocks.append(.paragraph(paragraph.joined(separator: "\n"))); paragraph = [] }
                 tableLines.append(line)
@@ -341,7 +335,7 @@ public struct MarkdownText: View {
                 paragraph = []
                 continue
             }
-            if let block = lineBlock(line) {
+            if let block = listBlock {
                 flush()
                 blocks.append(block)
             } else {
@@ -487,8 +481,12 @@ public struct MarkdownText: View {
             ForEach(Array(Self.blocks(text).enumerated()), id: \.offset) { _, block in
                 switch block {
                 case .heading(let value): Text(Self.inline(value, codeFont: Self.codeFont)).font(.hf(.headline, weight: .semibold))
-                case .bullet(let value):
-                    HStack(alignment: .firstTextBaseline, spacing: 6) { Text("•"); Text(Self.inline(value, codeFont: Self.codeFont)) }
+                case .bullet(let value, let depth):
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Self.bulletMarker(depth: depth)
+                        Text(Self.inline(value, codeFont: Self.codeFont))
+                    }
+                    .padding(.leading, CGFloat(depth) * HfRadius.Metrics.markdownListLevelIndent)
                 case .code(let value):
                     Text(value)
                         .font(.hf(.secondary, design: .monospaced))
@@ -497,8 +495,9 @@ public struct MarkdownText: View {
                         .background(RoundedRectangle(cornerRadius: 6).fill(Color.codeFill))
                 case .paragraph(let value): Text(Self.inline(value, codeFont: Self.codeFont))
                 case .table(let rows): Self.table(rows, codeFont: Self.codeFont)
-                case .numbered(let marker, let value):
+                case .numbered(let marker, let value, let depth):
                     HStack(alignment: .firstTextBaseline, spacing: 6) { Text(marker).monospacedDigit(); Text(Self.inline(value, codeFont: Self.codeFont)) }
+                        .padding(.leading, CGFloat(depth) * HfRadius.Metrics.markdownListLevelIndent)
                 case .quote(let value): Self.quote(Text(Self.inline(value, codeFont: Self.codeFont)))
                 case .rule: Divider()
                 }
@@ -553,7 +552,8 @@ public struct Banner: View {
 }
 
 #Preview("MarkdownText") {
-    MarkdownText(text: "# Heading\nSome *emphasis* and `code`.\n- bullet one\n- bullet two\n```\nfenced code\n```")
+    let sample = "# Heading\nSome *emphasis* and `code`.\n- bullet one\n- bullet two\n1. numbered\n  - nested bullet\n    - deeper bullet\n"
+    return MarkdownText(text: sample + "```\nfenced code\n```")
         .padding()
         .frame(width: 320)
 }

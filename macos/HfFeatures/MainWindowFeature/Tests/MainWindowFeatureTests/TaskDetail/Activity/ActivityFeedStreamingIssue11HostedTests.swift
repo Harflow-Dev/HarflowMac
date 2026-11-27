@@ -107,6 +107,138 @@ import Testing
         #expect(abs((state.anchor?.relativeOffset ?? .infinity) - before.relativeOffset) < 4)
     }
 
+    // MARK: - Nested list geometry
+
+    private static let nestedListText = "- x\n  - x\n    - x"
+
+    @Test func givenNestedBulletsInEachFeedStyle_whenRendered_thenTextOriginsStepByTheListIndent() async throws {
+        _ = NSApplication.shared
+        let prepared = StreamingMarkdownState().updating(text: Self.nestedListText, isStreaming: false)
+        for style in [ActivityFeedStyle.standard, .transcript] {
+            // given
+            let view = ReadingMarkdownView(text: Self.nestedListText, prepared: prepared)
+                .environment(\.activityFeedStyle, style)
+
+            // when
+            let origins = try renderedTextOrigins(of: view)
+
+            // then
+            #expect(origins.count == 3, "\(style) rendered \(origins)")
+            guard origins.count == 3 else { continue }
+            let indent = TaskScreenStyle.AgentProse.listIndent
+            #expect(abs((origins[1] - origins[0]) - indent) <= 1, "\(style) depth 1 origin \(origins)")
+            #expect(abs((origins[2] - origins[0]) - 2 * indent) <= 1, "\(style) depth 2 origin \(origins)")
+        }
+    }
+
+    @Test func givenNestedBulletsInMarkdownText_whenRendered_thenTextOriginsStepByTheLevelIndentToken() async throws {
+        _ = NSApplication.shared
+        // given
+        let view = MarkdownText(text: Self.nestedListText)
+
+        // when
+        let origins = try renderedTextOrigins(of: view)
+
+        // then
+        #expect(origins.count == 3, "rendered \(origins)")
+        guard origins.count == 3 else { return }
+        let indent = HfRadius.Metrics.markdownListLevelIndent
+        #expect(abs((origins[1] - origins[0]) - indent) <= 1, "depth 1 origin \(origins)")
+        #expect(abs((origins[2] - origins[0]) - 2 * indent) <= 1, "depth 2 origin \(origins)")
+    }
+
+    @Test func givenTheTranscriptListIndent_whenComparedWithTheLevelToken_thenTheyAreEqual() {
+        // given / when / then
+        #expect(TaskScreenStyle.AgentProse.listIndent == HfRadius.Metrics.markdownListLevelIndent)
+    }
+
+    @Test func givenNestedListDeltas_whenAssistantTextStreams_thenDepthsStayStableAndFinalHeightMatches() async throws {
+        _ = NSApplication.shared
+        // given
+        let fixture = ActivityFeedStreamingIssue11Fixture()
+        let state = ParallelColumnUIState()
+        let deltas = ["Intro.\n\n1. First item\n", " ", " - nested", " bullet one\n    ", "- deeper bullet\n  - nested bullet two\n"]
+        let host = NSHostingView(rootView: AnyView(fixture.feed(text: deltas[0], state: state)))
+        let window = activityMountedTestWindow(host, style: [.titled, .resizable])
+        defer { window.contentView = nil; window.close() }
+        window.orderFront(nil)
+        var previous: [String: StreamingMarkdownState] = [:]
+        var revision = -1
+        var text = ""
+        var seen: [Int: Int] = [:]
+
+        // when
+        for (index, delta) in deltas.enumerated() {
+            text += delta
+            let beforeRevision = revision
+            if index > 0 { host.rootView = AnyView(fixture.feed(text: text, state: state, previous: previous)) }
+            revision = try await requireCommittedUpdate(host: host, state: state, afterRevision: beforeRevision)
+            previous = ActivityRowsBuilder.markdownSnapshot(
+                from: [ActivityFixture.text(1, text, task: "issue-11", streaming: true)], previous: previous
+            )
+            for block in previous["issue-11#1"]?.blocks ?? [] {
+                guard case .bullet(_, let depth) = block.content else { continue }
+                if let earlier = seen[block.id] { #expect(earlier == depth) }
+                seen[block.id] = depth
+            }
+        }
+        let streamingHeight = documentHeight(in: host)
+        host.rootView = AnyView(fixture.feed(text: text, state: state, previous: previous, streaming: false))
+        _ = try await requireCommittedUpdate(host: host, state: state, afterRevision: nativeRevision(in: host, fallback: revision))
+        let finalised = documentHeight(in: host)
+
+        // then
+        #expect(seen.values.sorted() == [1, 1, 2])
+        #expect(abs(finalised - streamingHeight) <= 1)
+    }
+
+    /// The x origin (points) of the last ink cluster of each text line in the rendered view: the item
+    /// text, to the right of its bullet glyph.
+    private func renderedTextOrigins(of content: some View) throws -> [CGFloat] {
+        let size = CGSize(width: 400, height: 200)
+        let host = NSHostingView(rootView: AnyView(
+            content.padding(0)
+                .frame(width: size.width, height: size.height, alignment: .topLeading)
+                .background(Color.white)
+                .environment(\.colorScheme, .light)
+        ))
+        let window = activityMountedTestWindow(host, style: [.titled])
+        defer { window.contentView = nil; window.close() }
+        window.appearance = NSAppearance(named: .aqua)
+        window.setContentSize(size)
+        window.orderFront(nil)
+        host.frame = CGRect(origin: .zero, size: size)
+        host.layoutSubtreeIfNeeded()
+        host.displayIfNeeded()
+        let bitmap = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        let scale = CGFloat(bitmap.pixelsWide) / host.bounds.width
+        var origins: [CGFloat] = []
+        var bandColumns: [Int] = []
+        func closeBand() {
+            defer { bandColumns = [] }
+            guard !bandColumns.isEmpty else { return }
+            let sorted = bandColumns.sorted()
+            var clusterStart = sorted[0]
+            var last = sorted[0]
+            for column in sorted.dropFirst() {
+                if CGFloat(column - last) > 4 * scale { clusterStart = column }
+                last = column
+            }
+            origins.append(CGFloat(clusterStart) / scale)
+        }
+        for y in 0 ..< bitmap.pixelsHigh {
+            var columns: [Int] = []
+            for x in 0 ..< bitmap.pixelsWide {
+                guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { continue }
+                if color.redComponent + color.greenComponent + color.blueComponent < 2.4 { columns.append(x) }
+            }
+            if columns.isEmpty { closeBand() } else { bandColumns.append(contentsOf: columns) }
+        }
+        closeBand()
+        return origins
+    }
+
     private func finalizedHeight(host: NSHostingView<AnyView>, fixture: ActivityFeedStreamingIssue11Fixture,
                                  state: ParallelColumnUIState,
                                  previous: [String: StreamingMarkdownState], afterRevision: Int) async throws -> CGFloat {

@@ -202,4 +202,171 @@ import Testing
         #expect(duplicate == populated)
         #expect(duplicate.reparsedUTF8Count == populated.reparsedUTF8Count)
     }
+
+    // MARK: - Nested lists
+
+    private static let nestedFixture = "Intro\n\n1. First\n  - two\n    - four\n        - eight\n\t- tab\n   - three\n - one\n- top\n"
+        + "plain\n  - orphan\n\n```\n  - code\n```\n- after fence\n  - child\n"
+
+    private static func depths(_ state: StreamingMarkdownState) -> [Int] {
+        state.blocks.compactMap { block in
+            switch block.content {
+            case .bullet(_, let depth), .numbered(_, _, let depth): depth
+            default: nil
+            }
+        }
+    }
+
+    private static func prefixes(of text: String) -> [String] {
+        let bytes = Array(text.utf8)
+        return (1 ..< bytes.count).compactMap { String(bytes: bytes[..<$0], encoding: .utf8) }
+    }
+
+    @Test(arguments: [false, true])
+    func givenNestedListSplitAtEveryUTF8Boundary_whenStreaming_thenEveryPrefixMatchesAFreshParse(crlf: Bool) {
+        // given
+        let text = crlf ? Self.nestedFixture.replacingOccurrences(of: "\n", with: "\r\n") : Self.nestedFixture
+        var state = StreamingMarkdownState()
+
+        // when / then
+        for prefix in Self.prefixes(of: text) {
+            state = state.updating(text: prefix, isStreaming: true)
+            let fresh = StreamingMarkdownState().updating(text: prefix, isStreaming: true)
+            #expect(state.blocks == fresh.blocks, "streaming prefix \(prefix.debugDescription)")
+        }
+        state = state.updating(text: text, isStreaming: true)
+        #expect(state.blocks == StreamingMarkdownState().updating(text: text, isStreaming: true).blocks)
+    }
+
+    @Test(arguments: [false, true])
+    func givenNestedListPrefixes_whenFinalising_thenMatchesAFreshFinalParse(crlf: Bool) {
+        // given
+        let text = crlf ? Self.nestedFixture.replacingOccurrences(of: "\n", with: "\r\n") : Self.nestedFixture
+        var streaming = StreamingMarkdownState()
+
+        // when / then
+        for prefix in Self.prefixes(of: text) {
+            streaming = streaming.updating(text: prefix, isStreaming: true)
+            let finalised = streaming.updating(text: prefix + "\n", isStreaming: false)
+            let fresh = StreamingMarkdownState().updating(text: prefix + "\n", isStreaming: false)
+            #expect(finalised.blocks == fresh.blocks, "finalised prefix \(prefix.debugDescription)")
+        }
+    }
+
+    @Test func givenNestedFixture_whenStreaming_thenDepthsMatchTheExpectedSequence() {
+        // given / when
+        let state = StreamingMarkdownState().updating(text: Self.nestedFixture, isStreaming: false)
+
+        // then
+        #expect(Self.depths(state) == [0, 1, 2, 3, 2, 1, 0, 0, 0, 0, 1])
+    }
+
+    @Test func givenIndentationArrivingInSeparateDeltas_whenStreaming_thenEarlierItemsKeepTheirDepth() {
+        // given
+        let deltas = ["1. a\n", " ", " ", "- b", "\n", "    ", "- c\n"]
+        var state = StreamingMarkdownState()
+        var seen: [Int: Int] = [:]
+        var text = ""
+
+        // when
+        for delta in deltas {
+            text += delta
+            state = state.updating(text: text, isStreaming: true)
+            for block in state.blocks {
+                switch block.content {
+                case .bullet(_, let depth), .numbered(_, _, let depth):
+                    if let earlier = seen[block.id] { #expect(earlier == depth) }
+                    seen[block.id] = depth
+                default: break
+                }
+            }
+        }
+
+        // then
+        #expect(Self.depths(state) == [0, 1, 2])
+    }
+
+    @Test func givenSealedNestedPrefix_whenDeeperItemArrives_thenDepthUsesCarriedNestingWithoutReparsingPrefix() {
+        // given
+        let prefix = "1. a\n  - b\n"
+        let sealed = StreamingMarkdownState().updating(text: prefix, isStreaming: true)
+        let suffix = "    - c\n"
+
+        // when
+        let state = sealed.updating(text: prefix + suffix, isStreaming: true)
+
+        // then
+        #expect(state.reparsedUTF8Count == suffix.utf8.count)
+        #expect(Self.depths(state) == [0, 1, 2])
+    }
+
+    @Test func givenCorrectionThatChangesThePrefix_whenFinalTextArrives_thenNestingIsRebuiltFromZero() {
+        // given
+        let streaming = StreamingMarkdownState().updating(text: "- a\n  - b\n", isStreaming: true)
+
+        // when
+        let corrected = streaming.updating(text: "- x\n    - y\n", isStreaming: false)
+
+        // then
+        #expect(Self.depths(corrected) == [0, 1])
+        #expect(corrected.blocks == StreamingMarkdownState().updating(text: "- x\n    - y\n", isStreaming: false).blocks)
+    }
+
+    @Test func givenSameTextDifferingOnlyInIndentation_whenPrepared_thenBlocksAreUnequal() {
+        // given / when
+        let flat = StreamingMarkdownState().updating(text: "- a\n- b", isStreaming: false)
+        let nested = StreamingMarkdownState().updating(text: "- a\n  - b", isStreaming: false)
+
+        // then
+        #expect(flat != nested)
+        #expect(Self.depths(flat) == [0, 0])
+        #expect(Self.depths(nested) == [0, 1])
+    }
+
+    @Test func givenFlatListsAndExistingFixture_whenStreaming_thenEveryListDepthIsZero() {
+        // given
+        let text = "Intro **bold**\n\n- one\n- two\n\n1. three\n2) four\n\n```swift\nlet value = true\n```\n\n| Name | Value |\n|---|---|\n| status | ok |"
+
+        // when
+        let state = StreamingMarkdownState().updating(text: text, isStreaming: false)
+
+        // then
+        #expect(Self.depths(state) == [0, 0, 0, 0])
+    }
+
+    @Test(arguments: [false, true])
+    func givenNestedFixture_whenParsedByBothParsers_thenListDepthsAgree(crlf: Bool) {
+        // given
+        let text = crlf ? Self.nestedFixture.replacingOccurrences(of: "\n", with: "\r\n") : Self.nestedFixture
+
+        // when
+        let viewDepths = MarkdownText.blocks(text).compactMap { block -> Int? in
+            switch block {
+            case .bullet(_, let depth), .numbered(_, _, let depth): depth
+            default: nil
+            }
+        }
+        let streamed = StreamingMarkdownState().updating(text: text, isStreaming: false)
+
+        // then
+        #expect(viewDepths == Self.depths(streamed))
+        #expect(!viewDepths.isEmpty)
+    }
+
+    @Test func givenTextEndingInCarriageReturnWithoutNewline_whenFinalised_thenMatchesTheViewParser() {
+        // given
+        let text = "- a\r\n  - b\r"
+
+        // when
+        let state = StreamingMarkdownState().updating(text: text, isStreaming: false)
+
+        // then
+        #expect(Self.depths(state) == [0, 1])
+        #expect(MarkdownText.blocks(text) == [.bullet("a", depth: 0), .bullet("b", depth: 1)])
+        if case .bullet(let value, _) = state.blocks[1].content {
+            #expect(String(value.characters) == "b")
+        } else {
+            Issue.record("Expected a bullet")
+        }
+    }
 }

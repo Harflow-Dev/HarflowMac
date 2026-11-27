@@ -12,7 +12,7 @@ shared component dimensions from `HfRadius`/`HfRadius.Metrics`.
   appearance-aware `Color(hex:)` palette (`Palette`, with an exhaustive `Palette.all`), the type
   scale (`HfTextStyle`), radii and shared component metrics (`HfRadius`, `HfRadius.Metrics`),
   `FreedomBadge`, `StatusPill` (a live-clock owner over `StatusBadge`), `Chip`, `SectionLabel`,
-  `MarkdownText` (with its limited block parser), `Banner`, `Format`, `StatusColor`, `BackendStyle`,
+  `MarkdownText` (with its limited block parser, including nested lists), `Banner`, `Format`, `StatusColor`, `BackendStyle`,
   `AccessLabel`, and the presentation-motion helper (`HfMotion`) with its presentation-only
   `hfReduceMotionOverride` environment value.
 - **Backend and status components**: `BackendDot`, `BackendLabel`, `BackendDotStack`, `StatusIcon`,

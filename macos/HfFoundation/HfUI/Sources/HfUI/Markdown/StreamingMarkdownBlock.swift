@@ -12,11 +12,11 @@ public struct StreamingMarkdownBlock: Equatable, Identifiable, Sendable {
     /// The supported block presentations.
     public enum Content: Equatable, Sendable {
         case heading(AttributedString)
-        case bullet(AttributedString)
+        case bullet(AttributedString, depth: Int = 0)
         case code(String)
         case paragraph(AttributedString)
         case table([[AttributedString]])
-        case numbered(String, AttributedString)
+        case numbered(String, AttributedString, depth: Int = 0)
         case quote(AttributedString)
         case rule
     }
@@ -25,11 +25,11 @@ public struct StreamingMarkdownBlock: Equatable, Identifiable, Sendable {
         self.id = id
         switch block {
         case .heading(let text): self.content = .heading(MarkdownText.inline(text))
-        case .bullet(let text): self.content = .bullet(MarkdownText.inline(text))
+        case .bullet(let text, let depth): self.content = .bullet(MarkdownText.inline(text), depth: depth)
         case .code(let text): self.content = .code(text)
         case .paragraph(let text): self.content = .paragraph(MarkdownText.inline(text))
         case .table(let rows): self.content = .table(rows.map { $0.map { MarkdownText.inline($0) } })
-        case .numbered(let marker, let text): self.content = .numbered(marker, MarkdownText.inline(text))
+        case .numbered(let marker, let text, let depth): self.content = .numbered(marker, MarkdownText.inline(text), depth: depth)
         case .quote(let text): self.content = .quote(MarkdownText.inline(text))
         case .rule: self.content = .rule
         }

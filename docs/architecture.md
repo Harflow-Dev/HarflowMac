@@ -170,7 +170,7 @@ Standalone groups and the workflow Parallel view retain coordinator-owned horizo
 
 ## Streaming Markdown
 
-Task, Parallel, and native workflow activity prepare immutable Markdown blocks outside the main actor. Each conversation row retains its own parser snapshot, keyed by its task and event sequence. Appended text reparses the unresolved suffix; completed blocks retain source-offset identities and prepared inline attributes. Superseded presentation builds cannot publish their parser state. Removed rows and full teardown discard it; hidden visited Parallel columns retain it with their activity snapshot.
+Task, Parallel, and native workflow activity prepare immutable Markdown blocks outside the main actor. Each conversation row retains its own parser snapshot, keyed by its task and event sequence. Appended text reparses the unresolved suffix; completed blocks retain source-offset identities and prepared inline attributes. Superseded presentation builds cannot publish their parser state. Removed rows and full teardown discard it; hidden visited Parallel columns retain it with their activity snapshot. List nesting is carried across the sealed boundary with the retained blocks, so appended text never changes an emitted item's depth.
 
 The native feed measures the prepared blocks it displays. Completing an unchanged reply retains those blocks and removes the caret from reserved space without changing row height. Static reading surfaces prepare their Markdown asynchronously. Tables use equal-width columns so appended rows do not resize earlier columns.
 

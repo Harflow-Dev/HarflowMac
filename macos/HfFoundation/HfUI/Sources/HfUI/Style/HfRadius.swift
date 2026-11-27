@@ -30,6 +30,9 @@ public enum HfRadius {
         public static let formPreviewWidth: CGFloat = 300
         public static let toolbarPreviewWidth: CGFloat = 900
         public static let toolbarPreviewHeight: CGFloat = 500
+        /// Indent per nested Markdown list level (HarflowDesign `be5c743`, `v2/styles/bundle.css:182`,
+        /// `.hd-msg-agent ul` `padding-left: 20px`).
+        public static let markdownListLevelIndent: CGFloat = 20
         /// Shared layout steps, including unpadded compositional containers.
         public static let zero: CGFloat = 0
         public static let spacing2: CGFloat = 2

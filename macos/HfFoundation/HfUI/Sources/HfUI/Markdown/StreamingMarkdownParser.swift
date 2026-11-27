@@ -8,6 +8,8 @@ enum StreamingMarkdownParser {
         var blocks: [StreamingMarkdownBlock] = []
         var sealedOffset: Int
         var sealedCount = 0
+        /// The list nesting after the last sealed line, carried into the next suffix parse.
+        var sealedNesting = MarkdownListNesting()
     }
 
     private struct Line {
@@ -16,10 +18,11 @@ enum StreamingMarkdownParser {
         let end: Int
         let terminated: Bool
         var trimmed: String { raw.trimmingCharacters(in: .whitespaces) }
+        var column: Int { MarkdownListNesting.indentColumns(raw) }
     }
 
-    static func parse(_ text: String, offset: Int, isStreaming: Bool) -> Result {
-        var parser = Parser(offset: offset, isStreaming: isStreaming)
+    static func parse(_ text: String, offset: Int, nesting: MarkdownListNesting = MarkdownListNesting(), isStreaming: Bool) -> Result {
+        var parser = Parser(offset: offset, nesting: nesting, isStreaming: isStreaming)
         for line in lines(text, offset: offset) { parser.consume(line) }
         return parser.finish(text)
     }
@@ -32,8 +35,14 @@ enum StreamingMarkdownParser {
         private var code: [String]?
         private var blockStart: Int
         private var blockEnd: Int
-        init(offset: Int, isStreaming: Bool) {
-            self.result = Result(sealedOffset: offset)
+        private var nesting: MarkdownListNesting
+        /// The nesting after each consumed line, keyed by the line's end offset.
+        private var nestingAfter: [Int: MarkdownListNesting]
+        private var listDepth = 0
+        init(offset: Int, nesting: MarkdownListNesting, isStreaming: Bool) {
+            self.nesting = nesting
+            self.nestingAfter = [offset: nesting]
+            self.result = Result(sealedOffset: offset, sealedNesting: nesting)
             self.blockStart = offset
             self.blockEnd = offset
             self.isStreaming = isStreaming
@@ -69,8 +78,23 @@ enum StreamingMarkdownParser {
             }
         }
 
+        /// Updates the list nesting for this line before any block logic runs.
+        private mutating func trackNesting(_ line: Line) {
+            let value = line.trimmed
+            if value.hasPrefix("```") {
+                nesting.noteNonListLine(column: line.column)
+            } else if code == nil, !value.isEmpty {
+                switch MarkdownText.lineBlock(value) {
+                case .bullet, .numbered: listDepth = nesting.enterItem(column: line.column)
+                default: nesting.noteNonListLine(column: line.column)
+                }
+            }
+            nestingAfter[line.end] = nesting
+        }
+
         mutating func consume(_ line: Line) {
             let value = line.trimmed
+            trackNesting(line)
             if consumeFence(line) { return }
             if code != nil {
                 code?.append(line.raw)
@@ -103,7 +127,7 @@ enum StreamingMarkdownParser {
             if let block = MarkdownText.lineBlock(value) {
                 // An unterminated rule can still become inline prose when more text arrives.
                 flush(line.terminated || !MarkdownText.isRule(value))
-                emit(block, start: line.start, end: line.end, sealed: line.terminated)
+                emit(block.withListDepth(listDepth), start: line.start, end: line.end, sealed: line.terminated)
             } else {
                 if paragraph.isEmpty { blockStart = line.start }
                 paragraph.append(value)
@@ -151,6 +175,9 @@ enum StreamingMarkdownParser {
                 emit(.code(codeLines.joined(separator: "\n")), start: blockStart, end: blockEnd, sealed: false)
             }
             flush(false)
+            let snapshot = nestingAfter[result.sealedOffset]
+            assert(snapshot != nil, "Every sealing point is a line end or the parse offset")
+            result.sealedNesting = snapshot ?? MarkdownListNesting()
             return result
         }
 
@@ -170,7 +197,8 @@ enum StreamingMarkdownParser {
             start = index + 1
         }
         if start < bytes.count {
-            result.append(Line(raw: String(bytes: bytes[start...], encoding: .utf8) ?? "",
+            let end = bytes.last == 13 ? bytes.count - 1 : bytes.count
+            result.append(Line(raw: String(bytes: bytes[start ..< end], encoding: .utf8) ?? "",
                                start: offset + start, end: offset + bytes.count, terminated: false))
         }
         return result

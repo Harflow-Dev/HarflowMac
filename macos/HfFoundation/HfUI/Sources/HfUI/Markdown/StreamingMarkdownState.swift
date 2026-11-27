@@ -13,6 +13,7 @@ public struct StreamingMarkdownState: Equatable, Sendable {
 
     private var sealedOffset = 0
     private var sealedCount = 0
+    private var sealedNesting = MarkdownListNesting()
 
     /// Creates an empty preparation state.
     public init() {}
@@ -25,12 +26,15 @@ public struct StreamingMarkdownState: Equatable, Sendable {
         let offset = preservesSealedPrefix ? sealedOffset : 0
         let retained = preservesSealedPrefix ? Array(blocks.prefix(sealedCount)) : []
         let suffix = String(bytes: text.utf8.dropFirst(offset), encoding: .utf8) ?? ""
-        let parsed = StreamingMarkdownParser.parse(suffix, offset: offset, isStreaming: isStreaming)
+        let parsed = StreamingMarkdownParser.parse(
+            suffix, offset: offset, nesting: preservesSealedPrefix ? sealedNesting : MarkdownListNesting(), isStreaming: isStreaming
+        )
         result.source = text
         result.blocks = retained + parsed.blocks
         result.reparsedUTF8Count = suffix.utf8.count
         result.sealedOffset = parsed.sealedOffset
         result.sealedCount = retained.count + parsed.sealedCount
+        result.sealedNesting = parsed.sealedNesting
         return result
     }
 }

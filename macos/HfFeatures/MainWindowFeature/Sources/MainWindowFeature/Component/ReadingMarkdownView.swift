@@ -79,20 +79,28 @@ struct ReadingMarkdownView: View {
         return result
     }
 
+    /// The leading inset of a nested list item: one list-indent step per level.
+    private func listInset(depth: Int) -> CGFloat {
+        CGFloat(depth) * (transcript ? TaskScreenStyle.AgentProse.listIndent : HfRadius.Metrics.markdownListLevelIndent)
+    }
+
     @ViewBuilder
     private func blockView(_ content: StreamingMarkdownBlock.Content) -> some View {
         switch content {
         case .heading(let value):
             Text(styled(value)).font(.hf(.headline, weight: .semibold))
-        case .bullet(let value):
+        case .bullet(let value, let depth):
             HStack(alignment: .firstTextBaseline, spacing: transcript ? 0 : 6) {
                 if transcript {
-                    Text("•").frame(width: TaskScreenStyle.AgentProse.listIndent, alignment: .leading)
+                    Text(MarkdownText.bulletGlyph(depth: depth))
+                        .frame(width: TaskScreenStyle.AgentProse.listIndent, alignment: .leading)
+                        .accessibilityHidden(true)
                 } else {
-                    Text("•")
+                    MarkdownText.bulletMarker(depth: depth)
                 }
                 Text(styled(value)).lineSpacing(lineSpacing)
             }
+            .padding(.leading, listInset(depth: depth))
         case .code(let value):
             Text(value)
                 .font(.hf(.secondary, design: .monospaced))
@@ -103,13 +111,14 @@ struct ReadingMarkdownView: View {
             Text(styled(value)).lineSpacing(lineSpacing)
         case .table(let rows):
             table(rows).padding(.vertical, 4)
-        case .numbered(let marker, let value):
+        case .numbered(let marker, let value, let depth):
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(marker)
-.monospacedDigit()
+                    .monospacedDigit()
                     .frame(minWidth: transcript ? TaskScreenStyle.AgentProse.listIndent - 6 : nil, alignment: .trailing)
                 Text(styled(value)).lineSpacing(lineSpacing)
             }
+            .padding(.leading, listInset(depth: depth))
         case .quote(let value):
             MarkdownText.quote(Text(styled(value)).lineSpacing(lineSpacing))
         case .rule:
@@ -160,6 +169,8 @@ private struct ReadingMarkdownPreview: View {
     The store is read **before** it is warmed, so a cold keychain returns `nil`.
     - Warm it first
     - Then read
+      - Nested detail
+        - Deeper detail
     ```
     let value = warmed ? read(key) : nil
     ```
@@ -170,6 +181,7 @@ private struct ReadingMarkdownPreview: View {
     ---
     1. Reproduce with a cold keychain
     2. Warm, then read
+      - Nested bullet under a number
     > Verified on macOS 26 only.
     """
 
