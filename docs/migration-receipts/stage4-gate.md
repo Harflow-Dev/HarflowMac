@@ -139,4 +139,14 @@ The test-only fixes made after the batch touch only test code in MainWindowFeatu
 - **Hosted interference:** window-placement suites can still fail when other applications' windows share the screen.
   Hosted runs need a cleared screen.
 - VoiceOver remains deferred to M12.
-- A Harflow Check build from committed source is pending for the owner's review. Stage 4 is not yet accepted.
+- The Harflow Check review is recorded under "Owner sign-off" below.
+
+## Owner sign-off
+
+- **Date:** 2026-11-28
+- **Owner's words after the visual pass:** "the ui looks good!"
+- **What was reviewed:** a Harflow Check app built from HarflowMac `16d4a016b4b5e0d06b0385637005c62ae32820eb`.
+  - Release arm64 build, ad hoc signed, bundle identifier `dev.harflow.mac.check`, no URL types.
+  - Executable SHA-256: `f878be0e6da6e1cc8c31a12b8917c717bd2ecb9a97601abd7e8b8b8d07405c42`.
+
+Stage 4 is accepted. The open items above remain tracked for M12.
