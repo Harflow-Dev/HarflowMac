@@ -114,6 +114,7 @@ HOSTED_SUITES = frozenset({
     "MainWindowFeatureTests.LayerMotionFeedHostedTests",
     "MainWindowFeatureTests.LayerMotionLookHostedTests",
     "MainWindowFeatureTests.LayerMotionNoLoopHostedTests",
+    "MainWindowFeatureTests.HfUILayerMotionHostedTests",
     "MainWindowFeatureTests.ActivityFeedArrivalHostedTests",
     "MainWindowFeatureTests.ActivityFeedArrivalNoLoopHostedTests",
     "MainWindowFeatureTests.TaskPaneHostedTests",

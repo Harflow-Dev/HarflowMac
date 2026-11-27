@@ -175,8 +175,9 @@ public struct StatusIndicatorView: View {
 // MARK: - RunningSpinner
 
 /// The running indicator: an accent arc turning on a faint track, about 14 pt, so a running task
-/// reads at a glance (the system mini spinner rendered as a faint grey sparkle). Under Reduce
-/// Motion — the system setting or the presentation-only override — the arc holds still.
+/// reads at a glance (the system mini spinner rendered as a faint grey sparkle). It turns in Core
+/// Animation (`HfLayerSpinnerView`). Under Reduce Motion — the system setting or the presentation-only
+/// override — the arc holds still.
 public struct RunningSpinner: View {
     public var size: CGFloat
     public var tint: Color?
@@ -193,21 +194,17 @@ public struct RunningSpinner: View {
     }
 
     public var body: some View {
-        let color = tint ?? Color.runningFG
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
-            let turns = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1)
-            ZStack {
-                Circle().stroke(color.opacity(0.2), lineWidth: HfRadius.Metrics.spinnerStroke)
-                Circle()
-                    .trim(from: 0, to: 0.3)
-                    .stroke(color, style: StrokeStyle(lineWidth: HfRadius.Metrics.spinnerStroke, lineCap: .round))
-                    .rotationEffect(.degrees(turns * 360))
-            }
-        }
-        .frame(width: size, height: size)
-        // Often the only sign a step is still going (a pending tool row), so it speaks for itself.
-        .accessibilityElement()
-        .accessibilityLabel("Running")
+        // Core Animation, not a `TimelineView`: a per-frame SwiftUI clock re-measures the window root
+        // on every tick, wherever the spinner is nested.
+        HfLayerSpinner(spec: HfLayerSpinnerSpec(diameter: size,
+                                                lineWidth: HfRadius.Metrics.spinnerStroke,
+                                                color: tint ?? Color.runningFG),
+                       animates: !reduceMotion)
+            .frame(width: size, height: size)
+            // Often the only sign a step is still going (a pending tool row), so it speaks for itself.
+            // Callers that label the surrounding view hide it with `.accessibilityHidden(true)`.
+            .accessibilityElement()
+            .accessibilityLabel("Running")
     }
 }
 

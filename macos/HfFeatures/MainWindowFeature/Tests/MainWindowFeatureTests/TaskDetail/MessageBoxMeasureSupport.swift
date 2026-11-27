@@ -123,9 +123,31 @@ import Testing
         page.element(label).flatMap { page.frame($0) }.map { page.host.convert($0, from: nil) } ?? .zero
     }
 
+    /// Whether `point` (host coordinates, y down) lies on ink that Core Animation layers draw and `cacheDisplay` does
+    /// not rasterise: under Reduce Motion the shimmer's pulse layer fills its frame (rounded by its corner radius), and
+    /// the running spinner's ring is an annulus. These layers sit in the hosting view's tree, so their frames and radii
+    /// are read from it instead of from the bitmap.
+    static func layerInk(contains point: CGPoint, in host: NSView, views: [NSView]) -> Bool {
+        views.contains { view in
+            let frame = view.convert(view.bounds, to: host)
+            guard frame.contains(point) else { return false }
+            if let shimmer = view as? HfShimmerLayerView, shimmer.mode == .pulse {
+                let radius = min(shimmer.cornerRadius, min(frame.width, frame.height) / 2)
+                return CGPath(roundedRect: frame, cornerWidth: radius, cornerHeight: radius, transform: nil).contains(point)
+            }
+            if let spinner = view as? HfLayerSpinnerView {
+                let centre = CGPoint(x: frame.midX, y: frame.midY)
+                let distance = hypot(point.x - centre.x, point.y - centre.y)
+                return abs(distance - spinner.diameter / 2) <= spinner.lineWidth / 2
+            }
+            return false
+        }
+    }
+
     /// A 20 pt mask of a 1400 x 800 render of the loading skeleton: "#" where the pixel differs from the page
-    /// background (read in the right margin), "." elsewhere. The shimmer pulses its alpha with a wall clock even
-    /// under Reduce Motion, so values are not stable but the shapes are.
+    /// background (read in the right margin) or where a layer-drawn indicator covers it (`layerInk`), "." elsewhere.
+    /// The host bitmap no longer shows the shimmer's pulse fills or the spinner. Values are not compared across
+    /// frames, only the shapes.
     static func skeletonMask(dark: Bool, make: () -> AnyView) async throws -> [String] {
         let size = CGSize(width: 1400, height: 800)
         let page = RedesignHost(make()
@@ -137,9 +159,13 @@ import Testing
         func mask() -> [String] {
             let shot = Shot(page.host)
             let background = shot.rgb(at: CGPoint(x: 1390, y: 400))
+            let layerViews = LayerMotionProbe.views(HfShimmerLayerView.self, in: page.host) as [NSView]
+                + LayerMotionProbe.views(HfLayerSpinnerView.self, in: page.host) as [NSView]
             return stride(from: 2, to: 800, by: 20).map { y in
                 String(stride(from: 2, to: 1400, by: 20).map { x in
-                    Shot.close(shot.rgb(at: CGPoint(x: x, y: y)), background, 1) ? "." : "#"
+                    let point = CGPoint(x: x, y: y)
+                    let ink = !Shot.close(shot.rgb(at: point), background, 1) || layerInk(contains: point, in: page.host, views: layerViews)
+                    return ink ? "#" : "."
                 })
             }
         }

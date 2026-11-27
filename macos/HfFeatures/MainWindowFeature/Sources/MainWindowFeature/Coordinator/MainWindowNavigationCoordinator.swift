@@ -49,6 +49,9 @@ public protocol MainWindowNavigationCoordinator: ViewChildCoordinator {
     /// Carries the standalone task's top bar content to the principal toolbar item. The shell passes it down
     /// and never reads its contents.
     var topBar: TaskTopBarHolder { get }
+    /// Whether the main window is hidden, so the clocks in the shell's root graph should stop. The shell injects it as
+    /// `hfMotionPaused`. Row hosts do not receive it. Preview and test conformers return false.
+    var motionPaused: Bool { get }
     /// A single shell lifetime owns sidebar observation across expanded/collapsed composition.
     func startShellObservation()
     func stopShellObservation()
@@ -119,6 +122,7 @@ public extension MainWindowNavigationCoordinator {
     var mainGate: MainWindowGate? { nil }
     var workIsAvailable: Bool { runtimeIsReady && mainGate == nil }
     func retryLoadingWork() {}
+    var motionPaused: Bool { false }
     func startShellObservation() {}
     func stopShellObservation() {}
     func buildNavigationRail(expand _: @escaping @MainActor () -> Void) -> AnyView { AnyView(EmptyView()) }

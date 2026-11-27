@@ -78,11 +78,12 @@ struct NeedsYouView<VM: NeedsYouViewModel>: View {
 
 /// Renders a minute-granularity age from a clock-driven child, so snapshots never republish for time.
 struct NeedsYouAgeText: View {
+    @Environment(\.hfMotionPaused) private var motionPaused
     let since: Date?
 
     var body: some View {
         if let since {
-            TimelineView(.everyMinute) { context in
+            TimelineView(.hfMinute(paused: motionPaused)) { context in
                 Text(Self.age(since: since, now: context.date))
             }
         }

@@ -101,13 +101,14 @@ private struct BadgeAccessibility: ViewModifier {
 /// Once a run is close to an hour old the clock reserves the width of an hours reading, so crossing the hour does
 /// not change the width of what holds it.
 struct TaskLiveClock: View {
+    @Environment(\.hfMotionPaused) private var motionPaused
     let start: Date
 
     /// Elapsed seconds from which the hours width is reserved.
     private static let reserveFrom: TimeInterval = 3000
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
+        TimelineView(.hfSecond(paused: motionPaused)) { context in
             let elapsed = max(0, context.date.timeIntervalSince(start))
             ZStack(alignment: .leading) {
                 if elapsed >= Self.reserveFrom { Text("0:00:00").hidden() }

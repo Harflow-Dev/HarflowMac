@@ -271,6 +271,7 @@ struct SummaryPaneModel {
 // MARK: - SummaryPaneView
 
 struct SummaryPaneView: View {
+    @Environment(\.hfMotionPaused) private var motionPaused
     let model: SummaryPaneModel
     /// Draws the hero and the Result section. The standalone Events usage group passes `false` while the
     /// transcript's Summary entry shows the result; the model keeps its hero, so the Duration tile and the
@@ -367,7 +368,7 @@ struct SummaryPaneView: View {
                 .frame(width: HfRadius.Metrics.spacing28, height: HfRadius.Metrics.spacing28)
             VStack(alignment: .leading, spacing: HfRadius.Metrics.spacing4) {
                 if hero.isRunning {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                    TimelineView(.hfSecond(paused: motionPaused)) { context in
                         let elapsed = hero.startedAt.map { max(0, context.date.timeIntervalSince($0)) } ?? hero.fallbackElapsed
                         Text("Running · \(Format.clock(elapsed))").monospacedDigit()
                     }

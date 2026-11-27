@@ -157,6 +157,25 @@ struct LayerMotionBitmap {
         return sum / Double(components.count) * 255
     }
 
+    /// Mean absolute per-component difference over `region` (points, top down) only; the whole raster when `nil`.
+    func meanDifference(from other: LayerMotionBitmap, inside region: CGRect?) -> Double {
+        guard let region else { return meanDifference(from: other) }
+        guard width == other.width, height == other.height else { return 255 }
+        let left = max(0, Int(region.minX * scale)), right = min(width, Int((region.maxX * scale).rounded(.up)))
+        let top = max(0, Int(region.minY * scale)), bottom = min(height, Int((region.maxY * scale).rounded(.up)))
+        guard right > left, bottom > top else { return 0 }
+        var sum = 0.0
+        for y in top ..< bottom {
+            for x in left ..< right {
+                for channel in 0 ..< 4 {
+                    let index = (y * width + x) * 4 + channel
+                    sum += abs(components[index] - other.components[index])
+                }
+            }
+        }
+        return sum / Double((right - left) * (bottom - top) * 4) * 255
+    }
+
     /// The same raster with every premultiplied component scaled by `opacity`.
     func applyingOpacity(_ opacity: Double) -> LayerMotionBitmap {
         var copy = self

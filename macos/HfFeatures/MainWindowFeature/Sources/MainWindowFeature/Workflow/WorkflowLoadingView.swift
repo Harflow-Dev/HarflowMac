@@ -50,18 +50,39 @@ struct WorkflowLoadingCanvas: View {
     }
 
     private var connector: some View {
-        connectorShapes(.skeletonFill).shimmering().mask(connectorShapes(.cardFill))
+        // The sheen is a layer-backed overlay, so it takes the connector's outline as a layer mask
+        // rather than relying on a SwiftUI `.mask` reaching into it.
+        connectorShapes(.skeletonFill).shimmering(maskedBy: connectorOutline)
+    }
+
+    /// The connector's filled outline in its own frame: the stroked line and arrowhead plus the two end dots.
+    private var connectorOutline: Path {
+        var outline = connectorLinePath.strokedPath(connectorStroke)
+        for x in [CGFloat.zero, HfRadius.Metrics.workflowNodePreviewInset] {
+            outline.addEllipse(in: CGRect(x: x - HfRadius.Metrics.spacing5 / 2,
+                                          y: HfRadius.Metrics.workflowLoadingConnectorMidpoint - HfRadius.Metrics.spacing5 / 2,
+                                          width: HfRadius.Metrics.spacing5, height: HfRadius.Metrics.spacing5))
+        }
+        return outline
+    }
+
+    private var connectorStroke: StrokeStyle {
+        StrokeStyle(lineWidth: HfRadius.Metrics.workflowConnectionHighlightedLineWidth, lineCap: .round, lineJoin: .round)
+    }
+
+    private var connectorLinePath: Path {
+        Path { path in
+            path.move(to: CGPoint(x: 0, y: HfRadius.Metrics.workflowLoadingConnectorMidpoint))
+            path.addLine(to: CGPoint(x: HfRadius.Metrics.workflowLoadingConnectorTip, y: HfRadius.Metrics.workflowLoadingConnectorMidpoint))
+            path.move(to: CGPoint(x: HfRadius.Metrics.workflowLoadingConnectorWing, y: HfRadius.Metrics.workflowLoadingConnectorUpperY))
+            path.addLine(to: CGPoint(x: HfRadius.Metrics.workflowLoadingConnectorTip, y: HfRadius.Metrics.workflowLoadingConnectorMidpoint))
+            path.addLine(to: CGPoint(x: HfRadius.Metrics.workflowLoadingConnectorWing, y: HfRadius.Metrics.workflowLoadingConnectorLowerY))
+        }
     }
 
     private func connectorShapes(_ color: Color) -> some View {
         ZStack {
-            Path { path in
-                path.move(to: CGPoint(x: 0, y: HfRadius.Metrics.workflowLoadingConnectorMidpoint))
-                path.addLine(to: CGPoint(x: HfRadius.Metrics.workflowLoadingConnectorTip, y: HfRadius.Metrics.workflowLoadingConnectorMidpoint))
-                path.move(to: CGPoint(x: HfRadius.Metrics.workflowLoadingConnectorWing, y: HfRadius.Metrics.workflowLoadingConnectorUpperY))
-                path.addLine(to: CGPoint(x: HfRadius.Metrics.workflowLoadingConnectorTip, y: HfRadius.Metrics.workflowLoadingConnectorMidpoint))
-                path.addLine(to: CGPoint(x: HfRadius.Metrics.workflowLoadingConnectorWing, y: HfRadius.Metrics.workflowLoadingConnectorLowerY))
-            }.stroke(color, style: StrokeStyle(lineWidth: HfRadius.Metrics.workflowConnectionHighlightedLineWidth, lineCap: .round, lineJoin: .round))
+            connectorLinePath.stroke(color, style: connectorStroke)
             Circle()
 .fill(color)
                 .frame(width: HfRadius.Metrics.spacing5, height: HfRadius.Metrics.spacing5)

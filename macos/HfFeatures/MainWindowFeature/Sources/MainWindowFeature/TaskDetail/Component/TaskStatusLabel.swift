@@ -18,12 +18,13 @@ import SwiftUI
 /// "Running · 01:55" while running (ticks every second); "Done · 21:04" once settled with a
 /// recorded duration, with "taken over" when a person took the session over.
 struct TaskStatusLabel: View {
+    @Environment(\.hfMotionPaused) private var motionPaused
     let task: TaskInfo
 
     var body: some View {
         Group {
         if task.status.isRunning {
-            TimelineView(.periodic(from: .now, by: 1)) { context in
+            TimelineView(.hfSecond(paused: motionPaused)) { context in
                 StatusBadge(
                     status: task.status,
                     elapsedText: task.elapsed(now: context.date).map(Format.clock),

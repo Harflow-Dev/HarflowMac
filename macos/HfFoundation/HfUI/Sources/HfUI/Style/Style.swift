@@ -203,6 +203,7 @@ public enum Format {
 }
 
 public struct StatusPill: View {
+    @Environment(\.hfMotionPaused) private var motionPaused
     public let task: TaskInfo
 
     public init(task: TaskInfo) {
@@ -213,7 +214,7 @@ public struct StatusPill: View {
         // The live clock stays owned here: the pill ticks while running and hands the badge a
         // formatted elapsed string, so the badge itself stays a pure presentation of one moment.
         if task.status.isRunning {
-            TimelineView(.periodic(from: .now, by: 1)) { context in
+            TimelineView(.hfSecond(paused: motionPaused)) { context in
                 StatusBadge(
                     status: task.status,
                     elapsedText: Format.clock(task.elapsed(now: context.date)),

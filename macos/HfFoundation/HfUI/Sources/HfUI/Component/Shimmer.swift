@@ -32,32 +32,37 @@ public extension Color {
 /// The loading animation, applied via `.shimmering()`: a highlight sweeping left to right every
 /// 1.4 s. Under Reduce Motion there is no movement — the placeholder pulses its opacity slowly
 /// (1.6 s) instead, so it still reads as "loading" without anything travelling across the screen.
+///
+/// Both run in Core Animation (`HfShimmerLayerView`). A `TimelineView` here kept every placeholder's
+/// graph pending at 30 Hz, and each pending update re-measured the window root. The Reduce Motion
+/// override still resolves as `shimmerReduceMotionOverride ?? accessibilityReduceMotion`.
+///
+/// Under Reduce Motion the content itself is hidden and a layer of the same `skeletonFill` tone takes
+/// its place and pulses, so the view is meant for a flat `skeletonFill` placeholder (every caller
+/// is). The layer clips itself to the placeholder's shape through `cornerRadius` or `maskPath`.
 private struct ShimmerModifier: ViewModifier {
+    let maskPath: Path?
+    let cornerRadius: CGFloat
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.shimmerReduceMotionOverride) private var reduceMotionOverride
     private var reduceMotion: Bool { reduceMotionOverride ?? systemReduceMotion }
 
     func body(content: Content) -> some View {
-        // Drawing from a clock avoids a repeating animation transaction escaping into
-        // resizable panes when SwiftUI replaces a placeholder with loaded content.
-        TimelineView(.animation(minimumInterval: 1 / 30)) { context in
-            let time = context.date.timeIntervalSinceReferenceDate
-            if reduceMotion {
-                content.opacity(0.775 + 0.225 * cos(time * .pi * 2 / 1.6))
-            } else {
-                let phase = -cos(time.truncatingRemainder(dividingBy: 1.4) / 1.4 * .pi)
-                content
-                .overlay {
-                    GeometryReader { proxy in
-                        LinearGradient(colors: [.clear, .skeletonSheen, .clear], startPoint: .leading, endPoint: .trailing)
-                            .frame(width: proxy.size.width)
-                            .offset(x: phase * proxy.size.width)
-                    }
-                    .allowsHitTesting(false)
-                }
+        if reduceMotion {
+            content
+                .opacity(0)
+                .overlay { decoration(.pulse) }
+        } else {
+            content
+                .overlay { decoration(.sweep) }
                 .clipped()
-            }
         }
+    }
+
+    private func decoration(_ mode: HfShimmerLayerView.Mode) -> some View {
+        ShimmerLayer(mode: mode, maskPath: maskPath, cornerRadius: cornerRadius)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
@@ -72,7 +77,21 @@ public extension View {
     /// shape (`SkeletonBlock`/`SkeletonRows`), but usable on any view. See `ShimmerModifier` for the
     /// Reduce Motion behaviour.
     func shimmering() -> some View {
-        modifier(ShimmerModifier())
+        modifier(ShimmerModifier(maskPath: nil, cornerRadius: 0))
+    }
+
+    /// `shimmering()` with the overlay clipped to rounded corners of `cornerRadius`, for a rounded placeholder
+    /// (`SkeletonBlock`); the overlay is a layer view, which a SwiftUI `.clipShape` is not relied on to reach.
+    func shimmering(cornerRadius: CGFloat) -> some View {
+        modifier(ShimmerModifier(maskPath: nil, cornerRadius: cornerRadius))
+    }
+
+    /// `shimmering()` with the sheen (or the Reduce Motion pulse) limited to the filled area of
+    /// `path`, given in the view's own coordinate space (origin top left). A layer-backed overlay
+    /// cannot be relied on to follow a SwiftUI `.mask`, so a placeholder that is not a plain
+    /// rectangle or rounded shape passes its outline here instead.
+    func shimmering(maskedBy path: Path) -> some View {
+        modifier(ShimmerModifier(maskPath: path, cornerRadius: 0))
     }
 }
 
@@ -95,7 +114,7 @@ public struct SkeletonBlock: View {
     public var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius)
             .fill(Color.skeletonFill)
-            .shimmering()
+            .shimmering(cornerRadius: cornerRadius)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .frame(width: width, height: height)
     }

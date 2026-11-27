@@ -17,6 +17,15 @@ continue. There is no per-item detail fanout. Large retained histories can still
 many CLI processes within those caps; incomplete or over-budget reads show unavailable
 metrics rather than totals from incomplete history.
 
+## Window-root clocks and motion
+
+Any `TimelineView` in the main window, including one inside a nested hosting view under a representable (sidebar rows, feed rows, the workflow viewport), makes the window's root `NSHostingView` re-measure on every tick: the pending update climbs through the platform hosts to the root, which re-runs its size and layout over the whole graph. A 30 Hz clock therefore costs about 60 root passes a second, and a closed window keeps paying it while its hierarchy is alive. The rules:
+
+- Continuous motion runs in Core Animation, never in a `TimelineView` or a repeating SwiftUI animation. HfUI's shimmer (`HfShimmerLayerView`: a 1.4 s cosine sweep on a gradient layer, or under Reduce Motion a 1.6 s opacity pulse between 1.0 and 0.55 on a layer of the `skeletonFill` tone), the running spinner (`HfLayerSpinnerView`, which `StatusIcon`, `StatusBadge`, `TaskStatusBadge` and `LoadingLabel` all draw) and the running workflow node outline (`LayerOutlineView`, a conic gradient turning once every 3 s behind a ring mask) are layer animations phase-aligned to the reference date through `beginTime`. The shimmer's Reduce Motion choice stays `shimmerReduceMotionOverride ?? accessibilityReduceMotion`. A placeholder that is not a plain or rounded rectangle passes its outline to `shimmering(maskedBy:)`, because a layer-backed overlay cannot be relied on to follow a SwiftUI `.mask`.
+- The 1 Hz and per-minute clocks in the window's root graph (`TaskStatusLabel`, `TaskLiveClock`, the Inspector and Summary clocks, the workflow call rows, `StatusPill`, `NeedsYouAgeText`) use `HfClockSchedule`, which yields no entries while `hfMotionPaused` is true and a fresh entry at the moment it resumes, so a clock shown again is current at once. `MainWindowCoordinator.motionPaused` follows `MonitorVisibility.mainWindowVisiblePublisher()` (after `receive(on: main)`, written only on change) while the shell observes, and `MainWindowNavigationView` injects it as `hfMotionPaused`.
+- A flip of `motionPaused` re-evaluates the navigation view's body and re-runs `updateNSView` of the representables in the root graph (no-op diffs). That is accepted because visibility flips are rare.
+- Accepted residual: the per-second clocks inside row hosts (`TaskRow` in sidebar rows, `ActivityFeedSupplementaryRow` in feed rows) are not paused. Delivering the flag through the rows' environment copies and fingerprints would make every visibility flip remeasure the sidebar and reconcile the feed. If that residual matters, deliver the flag only to the row hosts' root views without touching the fingerprints.
+
 ## Activity feed
 
 Native activity rows retain text selection. The table owns displayed hosting views;
@@ -34,7 +43,7 @@ mounted; the next build made while the feed is not following clears them, and a 
 the reader is above the tail never fades. The fade is not part of the native entry, so it never
 forces a row to re-measure or refresh. Tool-group member fades inside a hosted card still use the
 SwiftUI fade.
-These layer indicators resolve their colours from the effective appearance of their AppKit view. That is the window's appearance, except where a SwiftUI colour-scheme override is set on the row: SwiftUI applies it to the hosted view as an appearance, so the override wins (measured for the caret, the tool spinner and the pulse dot). HfUI's shared `RunningSpinner` is unchanged for surfaces outside the feed.
+These layer indicators resolve their colours from the effective appearance of their AppKit view. That is the window's appearance, except where a SwiftUI colour-scheme override is set on the row: SwiftUI applies it to the hosted view as an appearance, so the override wins (measured for the caret, the tool spinner and the pulse dot). HfUI's shared `RunningSpinner` is also a Core Animation view (`HfLayerSpinnerView`) with the same look, and the feed's `FeedRunningSpinner` keeps its own `LayerSpinnerView` (same look and phase) because the feed's hosted tests inspect that type.
 
 Unchanged feed inputs refresh action callbacks without rebuilding native entries or
 remeasuring rows. Background presentation preparation supplies row revisions so native

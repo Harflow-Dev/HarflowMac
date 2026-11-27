@@ -98,6 +98,7 @@ struct WorkflowOnDemandCallList: View {
 
 /// One call row. A running row owns its one-second clock, so the sidebar presentation stays quiet between ticks.
 struct WorkflowOnDemandCallRowView: View {
+    @Environment(\.hfMotionPaused) private var motionPaused
     let row: WorkflowOnDemandCallRow
     let isSelected: Bool
     let onSelect: () -> Void
@@ -127,7 +128,7 @@ struct WorkflowOnDemandCallRowView: View {
 
     @ViewBuilder private var summary: some View {
         if row.isRunning, row.startedAt != nil {
-            TimelineView(.periodic(from: .now, by: 1)) { timeline in text(row.summary(now: timeline.date)) }
+            TimelineView(.hfSecond(paused: motionPaused)) { timeline in text(row.summary(now: timeline.date)) }
         } else {
             text(row.summary(now: .now))
         }

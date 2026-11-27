@@ -92,6 +92,7 @@ struct MainWindowNavigationView<Coordinator: MainWindowNavigationCoordinator>: V
         .frame(minWidth: 1000, minHeight: 620)
         .toolbar(removing: .title)
         .withPresentationContext()
+        .environment(\.hfMotionPaused, coordinator.motionPaused)
         .onAppear { coordinator.startShellObservation() }
         .onDisappear { coordinator.stopShellObservation() }
     }

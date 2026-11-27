@@ -122,26 +122,6 @@ struct TaskSnapshotFactsView: View {
     }
 
     @ViewBuilder
-    private func now(_ model: InspectorModel) -> some View {
-        section("Now") {
-            if let current = model.current, case .tool(let call, _) = current.body {
-                Text(call.tool).font(.hf(.body, weight: .medium))
-                Text(call.headline).font(.hf(.secondary, design: .monospaced)).foregroundStyle(Color.secondaryText).lineLimit(3)
-                if let startedAt = current.at {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        Text("\(Format.clock(context.date.timeIntervalSince(startedAt))) · activity item \(model.stepCount)")
-                            .font(.hf(.caption))
-                            .monospacedDigit()
-                            .foregroundStyle(Color.secondaryText)
-                    }
-                }
-            } else {
-                Text("Thinking or writing").font(.hf(.body)).foregroundStyle(Color.secondaryText)
-            }
-        }
-    }
-
-    @ViewBuilder
     private func basics(_ model: InspectorModel) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {

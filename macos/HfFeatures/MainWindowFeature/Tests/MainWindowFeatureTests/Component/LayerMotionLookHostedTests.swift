@@ -15,7 +15,7 @@ import Testing
 /// by the opacity, against SwiftUI's `.opacity(x)`.
 @MainActor @Suite(.serialized) struct LayerMotionLookHostedTests {
     /// Measured on this machine (see the `LAYER_MOTION_MEASURED` lines), with headroom.
-    private enum Tolerance {
+    enum Tolerance {
         /// Ink bounds and glyph size, in points (one pixel at 2x).
         static let geometry: CGFloat = 0.5
         /// Strongest ink colour of a fully covered pixel, in 8-bit levels.
@@ -43,14 +43,14 @@ import Testing
     }
 
     private typealias Color4 = (red: Double, green: Double, blue: Double, alpha: Double)
-    private static let appearances: [NSAppearance.Name] = [.aqua, .darkAqua]
-    private static let pad: CGFloat = 4
+    static let appearances: [NSAppearance.Name] = [.aqua, .darkAqua]
+    static let pad: CGFloat = 4
 
     // MARK: Helpers
 
-    private func name(_ appearance: NSAppearance.Name) -> String { appearance == .aqua ? "light" : "dark" }
+    func name(_ appearance: NSAppearance.Name) -> String { appearance == .aqua ? "light" : "dark" }
 
-    private func resolved(_ color: Color, _ appearance: NSAppearance.Name) -> (red: Double, green: Double, blue: Double, alpha: Double) {
+    func resolved(_ color: Color, _ appearance: NSAppearance.Name) -> (red: Double, green: Double, blue: Double, alpha: Double) {
         var result = (red: 0.0, green: 0.0, blue: 0.0, alpha: 0.0)
         NSAppearance(named: appearance)?.performAsCurrentDrawingAppearance {
             if let value = NSColor(color).usingColorSpace(.sRGB) {
@@ -60,8 +60,8 @@ import Testing
         return result
     }
 
-    private func levels(_ lhs: (red: Double, green: Double, blue: Double, alpha: Double),
-                        _ rhs: (red: Double, green: Double, blue: Double, alpha: Double)) -> Double {
+    func levels(_ lhs: (red: Double, green: Double, blue: Double, alpha: Double),
+                _ rhs: (red: Double, green: Double, blue: Double, alpha: Double)) -> Double {
         max(abs(lhs.red - rhs.red), abs(lhs.green - rhs.green), abs(lhs.blue - rhs.blue)) * 255
     }
 
@@ -72,7 +72,7 @@ import Testing
 
     /// Renders a SwiftUI reference in the fixture's window (so it takes the window's appearance) and
     /// returns its raster and size once it has drawn something.
-    private func reference(_ view: some View, in fixture: LayerMotionFixture) async -> (bitmap: LayerMotionBitmap, size: CGSize)? {
+    func reference(_ view: some View, in fixture: LayerMotionFixture) async -> (bitmap: LayerMotionBitmap, size: CGSize)? {
         let host = NSHostingView(rootView: AnyView(view))
         host.frame = CGRect(origin: CGPoint(x: 0, y: 0), size: host.fittingSize)
         fixture.container.addSubview(host)
@@ -89,8 +89,8 @@ import Testing
     /// Renders `view` inside a non-flipped container of `size`, `pad` points in from the top left. A
     /// layer-backed view only pushes its frame and updated layer to Core Animation on a run-loop turn,
     /// so this renders again until something is drawn.
-    private func candidate(_ view: NSView, size: CGSize, in fixture: LayerMotionFixture,
-                           prepare: (() -> Void)? = nil) async -> LayerMotionBitmap? {
+    func candidate(_ view: NSView, size: CGSize, in fixture: LayerMotionFixture,
+                   prepare: (() -> Void)? = nil) async -> LayerMotionBitmap? {
         let container = NSView(frame: CGRect(origin: CGPoint(x: 0, y: 0), size: size))
         container.wantsLayer = true
         fixture.container.addSubview(container)
@@ -107,14 +107,14 @@ import Testing
         return bitmap
     }
 
-    private func report(_ label: String, _ reference: LayerMotionBitmap, _ candidate: LayerMotionBitmap) {
+    func report(_ label: String, _ reference: LayerMotionBitmap, _ candidate: LayerMotionBitmap) {
         let boundsReference = reference.inkBounds() ?? .zero
         let boundsCandidate = candidate.inkBounds() ?? .zero
         print("LAYER_MOTION_MEASURED \(label) max=\(reference.maxDifference(from: candidate)) mean=\(reference.meanDifference(from: candidate)) "
             + "area_ref=\(reference.inkArea) area_cand=\(candidate.inkArea) bounds_ref=\(boundsReference) bounds_cand=\(boundsCandidate)")
     }
 
-    private func expectSameBounds(_ reference: LayerMotionBitmap, _ candidate: LayerMotionBitmap, _ label: String) {
+    func expectSameBounds(_ reference: LayerMotionBitmap, _ candidate: LayerMotionBitmap, _ label: String) {
         guard let lhs = reference.inkBounds(), let rhs = candidate.inkBounds() else {
             Issue.record("\(label): a raster is blank (reference \(reference.inkBounds() != nil), candidate \(candidate.inkBounds() != nil))")
             return
@@ -240,13 +240,10 @@ import Testing
             #expect(spec.arcFraction == 0.3 && spec.period == 1 && spec.ringOpacity == 0.2)
             for turns in [0.0, 0.25, 0.5, 0.8] {
                 // when
-                // At rest (turns == 0) the reference is HfUI's real `RunningSpinner` under Reduce Motion, which
-                // holds the arc at 0. A rotated arc cannot be frozen in the real view (its angle comes from a
-                // `TimelineView` clock), so the rotated frames compare against a copy of its body.
-                let referenceView: AnyView = turns == 0
-                    ? AnyView(RunningSpinner(size: size).environment(\.hfReduceMotionOverride, true).padding(Self.pad))
-                    : AnyView(spinnerReference(color: Color.runningFG, ringOpacity: 0.2, stroke: HfRadius.Metrics.spinnerStroke,
-                                               size: size, turns: turns))
+                // HfUI's `RunningSpinner` is a layer view too (`cacheDisplay` does not rasterise its sublayers), so the
+                // reference at every angle, rest included, is a copy of its former SwiftUI body with the angle frozen.
+                let referenceView = AnyView(spinnerReference(color: Color.runningFG, ringOpacity: 0.2, stroke: HfRadius.Metrics.spinnerStroke,
+                                                             size: size, turns: turns))
                 let expected = try #require(await reference(referenceView, in: fixture))
                 let view = LayerSpinnerView(spec: spec)
                 let rendered = try #require(await candidate(view, size: expected.size, in: fixture) {

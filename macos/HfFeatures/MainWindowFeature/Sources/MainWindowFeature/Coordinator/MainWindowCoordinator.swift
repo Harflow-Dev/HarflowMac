@@ -145,13 +145,17 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
     @ObservationIgnored private var listingSubscription: AnyCancellable?
     @ObservationIgnored private var listingChangeSubscription: AnyCancellable?
     @ObservationIgnored private var titlesSubscription: AnyCancellable?
+    /// Whether the main window is hidden, so the clocks in its root graph stop (`MainWindowCoordinator+Motion`).
+    public internal(set) var motionPaused = false
+    @ObservationIgnored var motionVisibilitySubscription: AnyCancellable?
+    @ObservationIgnored let monitorVisibilityOverride: (any MonitorVisibility)?
 
     // MARK: - Private Properties
 
     @ObservationIgnored private let selectionSubject = CurrentValueSubject<MonitorDestination?, Never>(nil)
     @ObservationIgnored private let isNewSessionPresentedSubject = CurrentValueSubject<Bool, Never>(false)
     @ObservationIgnored let workflowRunPolling = WorkflowRunPolling()
-    @ObservationIgnored private var sidebarVM: SidebarVM?
+    @ObservationIgnored var sidebarVM: SidebarVM?
     @ObservationIgnored private var startScreenVM: StartScreenVM?
     @ObservationIgnored private var newSessionVM: NewSessionVM?
     @ObservationIgnored private var statisticsVM: StatisticsVM?
@@ -179,9 +183,11 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         pasteboard: any PasteboardWriting = NSPasteboard.general,
         installRepository: (any InstallRepository)? = nil,
         taskListRepository: (any TaskListRepository)? = nil,
-        stateRecoveryRepository: (any StateRecoveryRepository)? = nil
+        stateRecoveryRepository: (any StateRecoveryRepository)? = nil,
+        monitorVisibility: (any MonitorVisibility)? = nil
     ) {
         self.parent = parent
+        self.monitorVisibilityOverride = monitorVisibility
         self.pasteboard = pasteboard
         self.installRepository = installRepository ?? GlobalValues.installRepository
         if let taskListRepository { self.taskListRepository = taskListRepository }
@@ -314,8 +320,6 @@ public final class MainWindowCoordinator: MainWindowNavigationCoordinator {
         SidebarNavigationRail(sharedSidebarVM(), expand: expand).eraseToAnyView()
     }
 
-    public func startShellObservation() { sharedSidebarVM().didAppear() }
-    public func stopShellObservation() { sidebarVM?.didDisappear() }
     public func performRuntimeSetup() {
         guard !runtimeSetupState.isReady, !runtimeSetupState.isBusy else { return }
         let install = installRepository
