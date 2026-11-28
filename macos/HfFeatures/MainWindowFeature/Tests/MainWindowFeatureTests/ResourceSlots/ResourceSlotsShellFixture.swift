@@ -44,6 +44,7 @@ final class ResourceSlotsShellModel: ResourceSlotsViewModel {
     }
 
     static func detailMarker(_ rowID: String) -> String { "Synthetic task owner destination " + rowID }
+    static let detailControlIdentifier = "resource-slots-shell-detail-control"
 
     func actionLabel(_ id: String) -> String { "Open workflow run " + id }
 
@@ -106,7 +107,8 @@ final class ResourceSlotsShellModel: ResourceSlotsViewModel {
 // MARK: - ResourceSlotsShellFixture
 
 /// The production shell (`MainWindowNavigationView`, real `NSToolbar`) hosting the resource slots
-/// screen, with the sidebar collapsed. Modelled on `TopBarIntegratedFixture`.
+/// screen, with the sidebar collapsed unless the variant asks for it expanded, and optionally a
+/// focusable control in the synthetic task detail. Modelled on `TopBarIntegratedFixture`.
 @MainActor
 final class ResourceSlotsShellFixture: ResourceSlotsNativeHosting {
     static let backTitle = "Back to resource slots"
@@ -122,7 +124,7 @@ final class ResourceSlotsShellFixture: ResourceSlotsNativeHosting {
     private let previousPolicy: NSApplication.ActivationPolicy
     private(set) var axEnhancedWasEnabled = false
 
-    init() {
+    init(sidebarCollapsed: Bool = true, detailControl: Bool = false) {
         _ = NSApplication.shared
         self.previousEnhanced = NSApplication.shared.accessibilityAttributeValue(enhanced)
         NSApplication.shared.accessibilitySetValue(true, forAttribute: enhanced)
@@ -134,12 +136,18 @@ final class ResourceSlotsShellFixture: ResourceSlotsNativeHosting {
         coordinator.resourceSlotsBuilder = { AnyView(ResourceSlotsView(model)) }
         coordinator.taskDetailBuilder = { id in
             AnyView(
-                Text(ResourceSlotsShellModel.detailMarker(id))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                VStack(spacing: 12) {
+                    Text(ResourceSlotsShellModel.detailMarker(id))
+                    if detailControl {
+                        Button("Detail action") {}
+                            .accessibilityIdentifier(ResourceSlotsShellModel.detailControlIdentifier)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             )
         }
         coordinator.onReturnToResourceSlots = { [weak model] in model?.returnFromOwner() }
-        let root = MainWindowNavigationView(coordinator, sidebarCollapsed: true)
+        let root = MainWindowNavigationView(coordinator, sidebarCollapsed: sidebarCollapsed)
             .defaultAppStorage(scratch.defaults)
             .environment(\.hfReduceMotionOverride, true)
         let controller = NSHostingController(rootView: AnyView(root))

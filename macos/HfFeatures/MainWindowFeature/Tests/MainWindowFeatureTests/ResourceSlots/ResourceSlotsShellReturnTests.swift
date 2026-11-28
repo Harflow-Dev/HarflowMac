@@ -8,9 +8,9 @@ import Testing
 /// the owner control after owner activation, the owner's detail and Back, with no responder
 /// reset between activation and restoration?
 ///
-/// P1 and P2 run in the shipping shell (`MainWindowNavigationView` with a real `NSToolbar`);
+/// P1, P1e (expanded sidebar), P2 and P2f (a focused detail control) run in the shipping shell (`MainWindowNavigationView` with a real `NSToolbar`);
 /// C1 is a control in the old in-content container, whose Back shares the owner's hosting view.
-/// The finding closes as not reproduced only when P1 and P2 both pass; C1 is recorded, never
+/// The finding closes as not reproduced only when P1, P1e, P2 and P2f all pass; C1 is recorded, never
 /// used for disposition. The setting is never changed: without Full Keyboard Access each
 /// variant records a skip and returns. Opt-in through `HARFLOW_RESOURCE_SLOTS_NATIVE_INTERACTION`.
 ///
@@ -26,10 +26,22 @@ extension ActivityFeedApprovalHostedTests {
         await resourceSlotsShellRunInShell("P1", gesture: .keyboard)
     }
 
+    @Test func givenFullKeyboardAccessAndExpandedSidebar_whenKeyboardOpensOwnerAndPressesShellBack_thenOwnerFocusReturnsInTheShippingShell() async {
+        guard ProcessInfo.processInfo.environment["HARFLOW_RESOURCE_SLOTS_NATIVE_INTERACTION"] == "1" else { return }
+        guard resourceSlotsShellHasFullKeyboardAccess("P1e") else { return }
+        await resourceSlotsShellRunInShell("P1e", gesture: .keyboard, sidebarCollapsed: false)
+    }
+
     @Test func givenFullKeyboardAccess_whenKeyboardOpensOwnerAndPointerPressesShellBack_thenOwnerFocusReturnsInTheShippingShell() async {
         guard ProcessInfo.processInfo.environment["HARFLOW_RESOURCE_SLOTS_NATIVE_INTERACTION"] == "1" else { return }
         guard resourceSlotsShellHasFullKeyboardAccess("P2") else { return }
         await resourceSlotsShellRunInShell("P2", gesture: .pointer)
+    }
+
+    @Test func givenFullKeyboardAccessAndFocusedDetailControl_whenPointerPressesShellBack_thenOwnerFocusReturnsInTheShippingShell() async {
+        guard ProcessInfo.processInfo.environment["HARFLOW_RESOURCE_SLOTS_NATIVE_INTERACTION"] == "1" else { return }
+        guard resourceSlotsShellHasFullKeyboardAccess("P2f") else { return }
+        await resourceSlotsShellRunInShell("P2f", gesture: .pointer, detailControl: true)
     }
 
     @Test func givenFullKeyboardAccess_whenKeyboardOpensOwnerAndPressesContainerBack_thenControlRunIsRecordedOnly() async {
@@ -51,8 +63,9 @@ private func resourceSlotsShellHasFullKeyboardAccess(_ variant: String) -> Bool 
 // MARK: - Shipping shell (P1, P2)
 
 @MainActor
-private func resourceSlotsShellRunInShell(_ name: String, gesture: ResourceSlotsBackGesture) async {
-    let fixture = ResourceSlotsShellFixture()
+private func resourceSlotsShellRunInShell(_ name: String, gesture: ResourceSlotsBackGesture, sidebarCollapsed: Bool = true,
+                                          detailControl: Bool = false) async {
+    let fixture = ResourceSlotsShellFixture(sidebarCollapsed: sidebarCollapsed, detailControl: detailControl)
     let model = fixture.model
     let trace = ResourceSlotsNativeTrace(state: model.readingState, fixture: fixture, scenario: "shell-return-" + name.lowercased())
     let evidence = ResourceSlotsShellEvidence(fixture: fixture, state: model.readingState, trace: trace, variant: name)
@@ -80,7 +93,10 @@ private func resourceSlotsShellRunInShell(_ name: String, gesture: ResourceSlots
                                              frame: items.first?.buttons.first.flatMap { fixture.frame($0) },
                                              container: items.first?.item.view)
         },
-        extraFocusable: { fixture.toolbarButtonCount() })
+        extraFocusable: { fixture.toolbarButtonCount() },
+        expectedStart: detailControl ? .detailControlToWindow : gesture == .keyboard ? .toolbarProxyToWindow : .noTransition,
+        sidebarCollapsed: sidebarCollapsed,
+        detailControlIdentifier: detailControl ? ResourceSlotsShellModel.detailControlIdentifier : nil)
     let verdict = await resourceSlotsShellRun(name, gesture: gesture, rig: rig, evidence: evidence)
     resourceSlotsShellReport(name, verdict, evidence: evidence, recordsIssue: true)
     completed = true
@@ -123,7 +139,7 @@ private func resourceSlotsShellRunInContainer(_ name: String) async {
             return ResourceSlotsBackLocation(itemCount: buttons.isEmpty ? 0 : 1, rawCount: buttons.count,
                                              frame: buttons.first.flatMap { fixture.frame($0) }, container: nil)
         },
-        extraFocusable: { 0 })
+        extraFocusable: { 0 }, expectedStart: .recordedOnly)
     let verdict = await resourceSlotsShellRun(name, gesture: .keyboard, rig: rig, evidence: evidence)
     // The control outcome is recorded for the masking comparison and never fails the suite.
     resourceSlotsShellReport(name, verdict, evidence: evidence, recordsIssue: false)

@@ -16,6 +16,43 @@ struct ResourceSlotsBackLocation {
     var container: NSView?
 }
 
+/// The responder transition each variant must show inside the Back action, before authorization
+/// is recorded. Recorded for the control variant, never judged.
+enum ResourceSlotsStartExpectation {
+    /// The Back toolbar item's proxy resigns to the window.
+    case toolbarProxyToWindow
+    /// The window already holds focus: no transition.
+    case noTransition
+    /// A focused detail control's proxy resigns to the window.
+    case detailControlToWindow
+    /// Whatever the start shows.
+    case recordedOnly
+
+    var description: String {
+        switch self {
+        case .toolbarProxyToWindow: "KeyViewProxy@toolbar -> NSWindow"
+        case .noTransition: "no transition (the window already holds focus)"
+        case .detailControlToWindow: "KeyViewProxy (detail control) -> NSWindow"
+        case .recordedOnly: "recorded only"
+        }
+    }
+
+    var isJudged: Bool { self != .recordedOnly }
+
+    func matches(_ change: ResourceSlotsShellEvidence.ResponderChange?) -> Bool {
+        switch self {
+        case .recordedOnly: return true
+        case .noTransition: return change == nil
+        case .toolbarProxyToWindow:
+            guard let change else { return false }
+            return change.from.className.contains("KeyViewProxy") && change.from.region == .toolbar && change.to.region == .window
+        case .detailControlToWindow:
+            guard let change else { return false }
+            return change.from.className.contains("KeyViewProxy") && change.from.region != .toolbar && change.to.region == .window
+        }
+    }
+}
+
 /// Adapts one host (the shipping shell or the old in-content container) to the shared flow.
 struct ResourceSlotsReturnRig {
     let fixture: any ResourceSlotsNativeHosting
@@ -30,6 +67,10 @@ struct ResourceSlotsReturnRig {
     let returnCallbacks: @MainActor () -> Int
     let backLocation: @MainActor () -> ResourceSlotsBackLocation
     let extraFocusable: @MainActor () -> Int
+    let expectedStart: ResourceSlotsStartExpectation
+    var sidebarCollapsed = true
+    /// A focusable control in the owner's detail that is focused before the pointer Back (P2f).
+    var detailControlIdentifier: String?
     var ownerIdentifier: String { "resource-slots-owner-" + rowID }
 }
 
@@ -97,13 +138,17 @@ func resourceSlotsShellRun(_ name: String, gesture: ResourceSlotsBackGesture, ri
         return resourceSlotsShellClassify(observation)
     }
     trace.mark("shell-mode", details: [
-        "variant": name, "gesture": String(describing: gesture), "sidebarCollapsed": "true",
+        "variant": name, "gesture": String(describing: gesture), "sidebarCollapsed": String(rig.sidebarCollapsed),
+        "detailControl": rig.detailControlIdentifier ?? "none",
         "axEnhancedUserInterface": String(describing: NSApplication.shared.accessibilityAttributeValue(
             NSAccessibility.Attribute(rawValue: "AXEnhancedUserInterface"))),
         "fullKeyboardAccess": String(NSApp.isFullKeyboardAccessEnabled)])
 
     // Qualification before activation.
     guard fixture.window.isKeyWindow, NSApp.isActive else { return unexecuted("window is not key or the app is not active") }
+    guard rig.state.focusReturnHostWindow === fixture.window else {
+        return unexecuted("the reading state's hosting window is not the fixture window")
+    }
     if rig.requiresToolbar, !M04ToolbarEvidence.isPopulated(fixture.window) { return unexecuted("toolbar is not populated") }
     guard await resourceInteractionQualifyTabDelivery(fixture, input: evidence) else { return unexecuted("Tab delivery did not qualify") }
     guard fixture.element(rig.ownerIdentifier) != nil, let owner = ownerControl(rig) else {
@@ -124,6 +169,19 @@ func resourceSlotsShellRun(_ name: String, gesture: ResourceSlotsBackGesture, ri
     }
     guard shown else { return unexecuted("the owner detail never appeared (marker \(rig.detailMarker))") }
     await fixturelessSettlePump(5)
+
+    // The detail control that holds keyboard focus when a pointer Back leaves the detail (P2f).
+    if let identifier = rig.detailControlIdentifier {
+        guard fixture.element(identifier) != nil else { return unexecuted("detail control \(identifier) not found by accessibility identity") }
+        let toDetail = await resourceInteractionTabToIdentifier(identifier, fixture: fixture, entry: "current", trace: trace,
+                                                                input: evidence)
+        guard toDetail.reached else { return unexecuted("Tab did not reach the detail control: " + toDetail.summary) }
+        let focused = resourceInteractionSnapshot(fixture)
+        guard focused.identifier == identifier else {
+            return unexecuted("the detail control is not focused (focused: \(focused.label), responder \(focused.responderName))")
+        }
+        trace.mark("shell-detail-control-focused", details: ["identifier": identifier, "responder": focused.responderName])
+    }
 
     // Staged qualification after activation.
     var location = rig.backLocation()
@@ -166,6 +224,7 @@ func resourceSlotsShellRun(_ name: String, gesture: ResourceSlotsBackGesture, ri
     let callbacksBefore = rig.returnCallbacks()
     let cyclesBefore = evidence.cycles.count
     evidence.stamp("back-gesture-begin", String(describing: gesture))
+    let beginSeq = evidence.seq
     switch gesture {
     case .keyboard: evidence.sendSpace(target: "Back (keyboard)", backGesture: true)
     case .pointer:
@@ -221,6 +280,22 @@ func resourceSlotsShellRun(_ name: String, gesture: ResourceSlotsBackGesture, ri
     observation.independentInputs = evidence.independentInputs(after: final.authorizedSeq, before: limit)
     let transitions = evidence.transitions(after: final.authorizedSeq, before: observation.cancelSeq ?? limit)
     observation.transitionSummary = transitions.map { "\($0.from.summary) -> \($0.to.summary)" }.joined(separator: "; ")
+    observation.priorLeakedEvent = evidence.priorLeakedEvent
+    // The starting transition is the last one inside the Back action, before authorization is recorded.
+    let start = evidence.changes.last { $0.seq > beginSeq && $0.seq < final.authorizedSeq }
+    let startSummary = start.map { "\($0.from.summary) -> \($0.to.summary)" } ?? "no transition"
+    let startMatches = rig.expectedStart.matches(start)
+    evidence.startOracleLine = "expected \(rig.expectedStart.description); observed \(startSummary); "
+        + (rig.expectedStart.isJudged ? (startMatches ? "matches" : "differs") : "recorded only")
+    trace.mark("shell-start-oracle", details: ["variant": name, "expected": rig.expectedStart.description, "observed": startSummary,
+                                               "result": startMatches ? "matches" : "differs"])
+    if rig.expectedStart.isJudged, !startMatches {
+        observation.startMismatch = "expected \(rig.expectedStart.description), observed \(startSummary)"
+    }
+    observation.proxyToProxy = transitions.filter {
+        $0.from.className.contains("KeyViewProxy") && $0.to.className.contains("KeyViewProxy")
+    }
+.map { "\($0.from.summary) -> \($0.to.summary)" }
     observation.subtype = resourceSlotsShellSubtype(observation, transitions: transitions, authorized: final.authorizedResponder)
 
     if oracle.stable, terminal == "focus-restored" {
@@ -238,6 +313,7 @@ func resourceSlotsShellRun(_ name: String, gesture: ResourceSlotsBackGesture, ri
     trace.mark("shell-verdict", details: [
         "variant": name, "verdict": verdict.headline, "authorizedResponder": final.authorizedResponder.summary,
         "terminal": final.terminalEvent ?? "none", "backFired": evidence.backFiredPhase(final),
+        "startOracle": evidence.startOracleLine ?? "none", "priorLeakedEvent": evidence.priorLeakedEvent ?? "none",
         "counts": "auth=\(observation.authorized) request=\(observation.requests) restored=\(observation.restored) "
             + "moved=\(observation.userMoved) cancel=\(observation.userCancel) budget=\(observation.budget)"])
     return verdict
@@ -247,7 +323,7 @@ func resourceSlotsShellRun(_ name: String, gesture: ResourceSlotsBackGesture, ri
 @MainActor
 func resourceSlotsShellReport(_ name: String, _ verdict: ResourceSlotsShellVerdict, evidence: ResourceSlotsShellEvidence,
                               recordsIssue: Bool) {
-    print("RESOURCE_SLOTS_SHELL variant=\(name) verdict=\(verdict.headline)")
+    print("RESOURCE_SLOTS_SHELL variant=\(name) verdict=\(verdict.headline) start=[\(evidence.startOracleLine ?? "not evaluated")]")
     guard recordsIssue, !verdict.isPass else { return }
     Issue.record(Comment(rawValue: "F-RS-FKA-RETURN \(name): \(verdict.headline) :: contentHost=\(evidence.contentHostDescription) :: "
         + evidence.timelineSummary()))

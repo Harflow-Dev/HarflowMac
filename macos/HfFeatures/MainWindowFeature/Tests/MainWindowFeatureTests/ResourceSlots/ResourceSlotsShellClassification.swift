@@ -27,6 +27,13 @@ struct ResourceSlotsShellObservation {
     var independentInputs: [String] = []
     /// Set when the delivery of the Back gesture's release could not be established.
     var gestureUnresolved: String?
+    /// A posted release an earlier variant of this run could neither observe nor find in the queue.
+    var priorLeakedEvent: String?
+    /// Set when the responder transition inside the Back action differs from the variant's
+    /// expected starting transition; not judged for the control variant.
+    var startMismatch: String?
+    /// Proxy-to-proxy responder transitions after authorization.
+    var proxyToProxy: [String] = []
     /// Descriptive only: what the responder log showed between authorization and the cancellation.
     var transitionSummary = "no responder transition observed"
     var subtype = "no responder transition observed in the log"
@@ -68,6 +75,10 @@ enum ResourceSlotsShellVerdict: Equatable {
 func resourceSlotsShellClassify(_ observation: ResourceSlotsShellObservation) -> ResourceSlotsShellVerdict {
     if let reason = observation.unexecuted { return .unexecuted(reason) }
     if !observation.outsideInput.isEmpty {
+        if let leak = observation.priorLeakedEvent {
+            return .unresolved("possible leaked test event (\(leak)); \(observation.outsideInput.count) untagged event(s): "
+                + observation.outsideInput.prefix(5).joined(separator: ", "))
+        }
         return .outsideInput("\(observation.outsideInput.count) untagged event(s): " + observation.outsideInput.prefix(5).joined(separator: ", "))
     }
     if let detail = observation.gestureUnresolved { return .unresolved(detail) }
@@ -87,6 +98,10 @@ func resourceSlotsShellClassify(_ observation: ResourceSlotsShellObservation) ->
     if observation.authorized != 1 { problems.append("focus-authorized x\(observation.authorized)") }
     if observation.requests != 1 { problems.append("no single focus request (x\(observation.requests))") }
     if observation.restored != 1 { problems.append("no single completion (focus-restored x\(observation.restored))") }
+    if let mismatch = observation.startMismatch { problems.append("starting transition: " + mismatch) }
+    if !observation.proxyToProxy.isEmpty {
+        problems.append("proxy-to-proxy transition after authorization: " + observation.proxyToProxy.joined(separator: "; "))
+    }
     if !observation.oracle.ownerIsFirstResponder { problems.append("owner control is not the first responder") }
     if !observation.oracle.stable { problems.append("focus was lost after assignment") }
     if !observation.oracle.reopenedSameRow { problems.append(observation.oracle.reopenAttempted

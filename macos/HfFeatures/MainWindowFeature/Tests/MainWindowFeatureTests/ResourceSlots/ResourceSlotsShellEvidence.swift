@@ -58,6 +58,8 @@ final class ResourceSlotsShellEvidence {
         var endSeq: Int?
         var deliveredAt: TimeInterval?
         var release: String?
+        /// Which matcher clause tied a monitor observation to this posted event.
+        var matchClause: String?
     }
 
     struct DiagnosticEntry {
@@ -94,6 +96,12 @@ final class ResourceSlotsShellEvidence {
     private(set) var outsideInput: [String] = []
     private(set) var gestureCompleteSeq: Int?
     private(set) var gestureRelease: String?
+    /// The leak recorded by an earlier variant of this run, when there was one.
+    let priorLeakedEvent: String?
+    /// Full fields of every posted event and of every monitor observation, in order.
+    private(set) var eventLog: [(seq: Int, text: String)] = []
+    /// One line describing the expected and the observed starting transition; set by the flow.
+    var startOracleLine: String?
     private(set) var contentHostDescription = "unresolved"
     private var contentHost: NSView?
     private var lastResponder: ResponderRecord
@@ -106,7 +114,13 @@ final class ResourceSlotsShellEvidence {
         let eventNumber: Int?
         let keyCode: UInt16?
         let timestamp: TimeInterval
+        let windowNumber: Int
+        let location: CGPoint
     }
+
+    /// Set when a posted release was neither observed nor found in the queue: it may still be
+    /// pending somewhere, so outside input in later variants of the same run cannot be trusted.
+    static var possibleLeakedEvent: String?
 
     private var tagged: [TaggedEvent] = []
     /// Index of the posted release that ends the pointer Back gesture, while it is awaited.
@@ -124,6 +138,7 @@ final class ResourceSlotsShellEvidence {
         self.fixture = fixture
         self.state = state
         self.variant = variant
+        self.priorLeakedEvent = Self.possibleLeakedEvent
         self.lastResponder = .init(className: "nil", identity: nil, region: .none, ancestors: [])
         trace.productionTap = { [weak self] record in self?.receive(record) }
     }
@@ -299,18 +314,50 @@ final class ResourceSlotsShellEvidence {
         }
     }
 
-    /// An event is ours when it is the object we sent, or has the same type and event number
-    /// (mouse), or the same type, key code and exact timestamp (key).
-    private func taggedIndex(for event: NSEvent) -> Int? {
-        let mouse = Self.isMouse(event.type)
-        let match = tagged.first { entry in
-            if entry.event === event { return true }
-            guard entry.type == event.type else { return false }
-            if mouse, let number = entry.eventNumber, number == event.eventNumber { return true }
-            if mouse { return entry.timestamp == event.timestamp }
-            return entry.keyCode == event.keyCode && entry.timestamp == event.timestamp
+    private static let locationTolerance: CGFloat = 0.5
+    private static let timestampTolerance: TimeInterval = 0.001
+
+    /// The clause by which `event` is the tagged event, or `nil`. One fixed rule serves both the
+    /// monitor and the queue peek. Identity always matches. A mouse event matches by type, window
+    /// number and location (within 0.5 pt) plus an equal event number or a timestamp within 1 ms.
+    /// A key event matches by type, key code and exact timestamp.
+    private func matchClause(_ entry: TaggedEvent, _ event: NSEvent) -> String? {
+        if entry.event === event { return "identity" }
+        guard entry.type == event.type else { return nil }
+        guard Self.isMouse(event.type) else {
+            return entry.keyCode == event.keyCode && entry.timestamp == event.timestamp ? "type+keyCode+timestamp" : nil
         }
-        return match?.index
+        guard entry.windowNumber == event.windowNumber,
+              abs(entry.location.x - event.locationInWindow.x) <= Self.locationTolerance,
+              abs(entry.location.y - event.locationInWindow.y) <= Self.locationTolerance
+        else { return nil }
+        if let number = entry.eventNumber, number == event.eventNumber { return "type+window+location+eventNumber" }
+        if abs(entry.timestamp - event.timestamp) < Self.timestampTolerance { return "type+window+location+timestamp" }
+        return nil
+    }
+
+    private func taggedMatch(for event: NSEvent) -> (index: Int, clause: String)? {
+        for entry in tagged {
+            if let clause = matchClause(entry, event) { return (entry.index, clause) }
+        }
+        return nil
+    }
+
+    /// Every field the matcher can use, at full precision.
+    private func fields(_ event: NSEvent) -> String {
+        var parts = ["type=\(event.type.rawValue)", "window=\(event.windowNumber)", String(format: "timestamp=%.9f", event.timestamp)]
+        if Self.isMouse(event.type) {
+            parts.append(String(format: "location=%.4f,%.4f", event.locationInWindow.x, event.locationInWindow.y))
+            parts.append("eventNumber=\(event.eventNumber)")
+            parts.append("clickCount=\(event.clickCount)")
+        } else if event.type == .keyDown || event.type == .keyUp {
+            parts.append("keyCode=\(event.keyCode)")
+        }
+        return parts.joined(separator: " ")
+    }
+
+    private func log(_ text: String) {
+        eventLog.append((next(), text))
     }
 
     @discardableResult
@@ -324,8 +371,10 @@ final class ResourceSlotsShellEvidence {
                                  enqueuedAt: now, startSeq: next())
         tagged.append(TaggedEvent(index: record.index, event: event, type: event.type,
                                   eventNumber: Self.isMouse(event.type) ? event.eventNumber : nil,
-                                  keyCode: isKey ? event.keyCode : nil, timestamp: event.timestamp))
+                                  keyCode: isKey ? event.keyCode : nil, timestamp: event.timestamp,
+                                  windowNumber: event.windowNumber, location: event.locationInWindow))
         inputs.append(record)
+        log("posted #\(record.index) \(kind): " + fields(event))
         return record.index
     }
 
@@ -338,8 +387,10 @@ final class ResourceSlotsShellEvidence {
 
     private func observe(_ event: NSEvent) {
         guard event.window === fixture.window || event.windowNumber == fixture.window.windowNumber else { return }
-        if let index = taggedIndex(for: event) {
+        if let (index, clause) = taggedMatch(for: event) {
+            log("monitor observed #\(index) (matched by \(clause)): " + fields(event))
             if inputs[index].release == nil {
+                inputs[index].matchClause = clause
                 inputs[index].deliveryStartSeq = next()
                 inputs[index].deliveredAt = now
                 inputs[index].release = "dispatched"
@@ -357,6 +408,7 @@ final class ResourceSlotsShellEvidence {
             }
             return
         }
+        log("monitor observed untagged: " + fields(event))
         outsideInput.append("\(event.type.rawValue)@\(String(format: "%.3f", now))")
         stamp("outside-input", "type=\(event.type.rawValue) keyCode=\(event.type == .keyDown || event.type == .keyUp ? Int(event.keyCode) : -1)")
     }
@@ -386,9 +438,10 @@ final class ResourceSlotsShellEvidence {
     }
 
     /// Tracking-safe click: the release is queued before the press is sent, so a tracking loop
-    /// finds it. Gesture completion is stamped from evidence: at once when the release is gone
-    /// without the monitor seeing it (consumed by tracking), after its dispatch when the monitor saw
-    /// it, and "unresolved" (with the stranded release removed) when it is never dispatched.
+    /// finds it. Only a monitor-observed release is resolved: gesture completion is stamped after
+    /// its dispatch, from the run loop. Anything else is "unresolved". Whether the release was
+    /// consumed inside a tracking loop is never claimed. A queued release matched to this click is
+    /// removed; an unobserved release that is not in the queue may be a leaked event.
     func click(at point: CGPoint, target: String) -> String {
         let window = fixture.window
         let base = nextMouseNumber
@@ -405,34 +458,47 @@ final class ResourceSlotsShellEvidence {
         NSApp.postEvent(up, atStart: true)
         let downIndex = register(down, kind: "mouseDown (sendEvent)", target: target, backGesture: true)
         window.sendEvent(down)
-        // Taken before the queue peek, so the completion point is not moved by the peek.
         let returnedSeq = next()
         finish(downIndex, release: "sendEvent", endSeq: returnedSeq)
-        if inputs[upIndex].release == nil, !releaseIsQueued(up) {
-            // Gone from the queue and never seen by the monitor: a tracking loop consumed it.
-            pendingGestureRelease = nil
-            inputs[upIndex].release = "consumed by tracking"
-            completeGesture(release: "mouse release consumed by tracking", at: returnedSeq)
-            return "consumed by tracking"
-        }
-        let deadline = Date(timeIntervalSinceNow: 0.3)
+        stamp("release-after-press", queuedDescription(upIndex))
+        let deadline = Date(timeIntervalSinceNow: 0.5)
         while gestureCompleteSeq == nil, Date() < deadline {
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.005))
         }
         if gestureCompleteSeq != nil { return "dispatched" }
         pendingGestureRelease = nil
+        var state = "the monitor observed the release but completion was not stamped"
         if inputs[upIndex].release == nil {
-            if releaseIsQueued(up) { _ = NSApp.nextEvent(matching: .leftMouseUp, until: .distantPast, inMode: .default, dequeue: true) }
-            inputs[upIndex].release = "unresolved"
+            if let clause = queuedClause(upIndex) {
+                _ = NSApp.nextEvent(matching: .leftMouseUp, until: .distantPast, inMode: .default, dequeue: true)
+                inputs[upIndex].release = "unresolved (queued, removed)"
+                state = "the release stayed queued (matched by \(clause)) and was removed"
+            } else {
+                inputs[upIndex].release = "unresolved (not observed, not in the queue)"
+                state = "the release was not observed and not found in the queue: possible leaked event"
+                Self.possibleLeakedEvent = "variant \(variant): the release posted at seq #\(inputs[upIndex].startSeq) "
+                    + "was neither observed nor found in the queue"
+            }
         }
-        gestureUnresolved = "the posted mouse release was not dispatched (release=\(inputs[upIndex].release ?? "none"))"
+        gestureUnresolved = "release unobserved; delivery unresolved (\(state))"
         stamp("back-gesture-unresolved", gestureUnresolved ?? "")
         return "unresolved"
     }
 
-    private func releaseIsQueued(_ up: NSEvent) -> Bool {
-        guard let queued = NSApp.nextEvent(matching: .leftMouseUp, until: .distantPast, inMode: .default, dequeue: false) else { return false }
-        return queued === up || (queued.eventNumber == up.eventNumber && queued.timestamp == up.timestamp)
+    /// The clause by which the first queued left-mouse-up is the tagged event at `index`, or `nil`.
+    private func queuedClause(_ index: Int) -> String? {
+        guard let entry = tagged.first(where: { $0.index == index }),
+              let queued = NSApp.nextEvent(matching: .leftMouseUp, until: .distantPast, inMode: .default, dequeue: false)
+        else { return nil }
+        return matchClause(entry, queued)
+    }
+
+    private func queuedDescription(_ index: Int) -> String {
+        guard let queued = NSApp.nextEvent(matching: .leftMouseUp, until: .distantPast, inMode: .default, dequeue: false) else {
+            return "no left-mouse-up queued; release \(inputs[index].release ?? "not yet observed")"
+        }
+        let clause = queuedClause(index).map { "matched by \($0)" } ?? "not matched"
+        return "queued (\(clause)): " + fields(queued)
     }
 
     private func completeGesture(release: String, at seq: Int? = nil) {
@@ -453,10 +519,7 @@ final class ResourceSlotsShellEvidence {
             guard !isPostedRelease || input.deliveryStartSeq != nil else { continue }
             let start = isPostedRelease ? (input.deliveryStartSeq ?? input.startSeq) : input.startSeq
             guard start <= cycle.authorizedSeq, cycle.authorizedSeq <= (input.endSeq ?? Int.max) else { continue }
-            if isPostedRelease { return "during the release (\(input.kind) dispatched)" }
-            if gesture.contains(where: { $0.release == "consumed by tracking" }) {
-                return "during the press's tracking loop (release consumed; exact phase unresolved)"
-            }
+            if isPostedRelease { return "during the release (dispatched)" }
             return "during \(input.kind)"
         }
         if let last = gesture.compactMap(\.endSeq).max(), cycle.authorizedSeq > last { return "after the gesture completed" }
@@ -482,64 +545,5 @@ final class ResourceSlotsShellEvidence {
     /// Responder changes between authorization and the limit sequence, in order.
     func transitions(after authorizedSeq: Int, before limit: Int) -> [ResponderChange] {
         changes.filter { $0.seq > authorizedSeq && $0.seq < limit }
-    }
-
-    // MARK: Reporting
-
-    func timelineSummary(limit: Int = 60) -> String {
-        var lines: [(Int, String)] = []
-        for change in changes {
-            let axText = change.accessibility.map { "ax=\($0.identifier ?? "-")|\($0.role ?? "-")|\($0.text ?? "-")" } ?? "ax=pending"
-            lines.append((change.seq, "#\(change.seq) responder[\(change.source)] c\(change.cycle) "
-                + "\(change.from.summary) -> \(change.to.summary) \(axText)"))
-        }
-        for input in inputs {
-            lines.append((input.startSeq, "#\(input.startSeq) input \(input.kind) -> \(input.target) gesture=\(input.backGesture) "
-                + "release=\(input.release ?? "-") end=#\(input.endSeq.map(String.init) ?? "-")"))
-        }
-        for entry in diagnostics {
-            lines.append((entry.seq, "#\(entry.seq) diag \(entry.event) c\(entry.cycle)"))
-        }
-        for stamp in stamps { lines.append((stamp.seq, "#\(stamp.seq) \(stamp.text)")) }
-        let sorted = lines.sorted { $0.0 < $1.0 }.map(\.1)
-        return sorted.suffix(limit).joined(separator: " | ")
-    }
-
-    /// Writes the buffered timeline into the trace once the run is over.
-    func flush(to trace: ResourceSlotsNativeTrace) {
-        trace.mark("shell-evidence-summary", details: ["variant": variant, "contentHost": contentHostDescription,
-                                                       "outsideInput": String(outsideInput.count),
-                                                       "gestureRelease": gestureRelease ?? "none",
-                                                       "limit": "local monitor cannot see events consumed inside nested tracking loops"])
-        for cycle in cycles {
-            trace.mark("shell-cycle", details: [
-                "cycle": String(cycle.id), "authorizedSeq": String(cycle.authorizedSeq),
-                "authorizedResponder": cycle.authorizedResponder.summary,
-                "authorizedResponderID": cycle.authorizedResponder.identity.map { String(describing: $0) } ?? "nil",
-                "requestToken": cycle.requestToken?.uuidString ?? "none", "requestSeq": cycle.requestSeq.map(String.init) ?? "none",
-                "terminal": cycle.terminalEvent ?? "none", "terminalSeq": cycle.terminalSeq.map(String.init) ?? "none",
-                "backFired": backFiredPhase(cycle)])
-        }
-        for change in changes {
-            trace.mark("shell-responder-change", details: [
-                "seq": String(change.seq), "cycle": String(change.cycle), "token": change.token?.uuidString ?? "none",
-                "source": change.source, "from": change.from.summary, "to": change.to.summary,
-                "toID": change.to.identity.map { String(describing: $0) } ?? "nil",
-                "axIdentifier": change.accessibility?.identifier ?? "nil", "axRole": change.accessibility?.role ?? "nil",
-                "axText": change.accessibility?.text ?? "nil"])
-        }
-        for input in inputs {
-            trace.mark("shell-input", details: [
-                "start": String(input.startSeq), "end": input.endSeq.map(String.init) ?? "none", "kind": input.kind,
-                "target": input.target, "responderAtSend": input.responderAtSend, "backGesture": String(input.backGesture),
-                "release": input.release ?? "none", "tag": input.tag,
-                "enqueuedAt": String(format: "%.4f", input.enqueuedAt),
-                "deliveredAt": input.deliveredAt.map { String(format: "%.4f", $0) } ?? "none"])
-        }
-        for entry in diagnostics {
-            trace.mark("shell-diagnostic", details: ["seq": String(entry.seq), "event": entry.event, "cycle": String(entry.cycle),
-                                                     "token": entry.token?.uuidString ?? "none"])
-        }
-        for item in stamps { trace.mark("shell-stamp", details: ["seq": String(item.seq), "text": item.text]) }
     }
 }

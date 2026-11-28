@@ -210,8 +210,9 @@ extension ActivityFeedApprovalHostedTests {
         try await resourceInteractionQualifyKeyboardHost(fixture, model)
         let rowID = model.rowIDs[0]
         let ownerLabel = model.actionLabel(rowID)
-        // A persistent sibling table holds keyboard focus before Back; it is the responder
-        // authorizeFocusReturn captures at Back, so it must stay neutral during restoration.
+        // A persistent sibling table holds keyboard focus before Back. authorizeFocusReturn either
+        // captures it as the authorized responder or resigns it to the window and authorizes the
+        // window; in both cases the owner must still be restored.
         // NSHostingView does not support foreign subviews, so the table lives in a window-level
         // AppKit container beside the hosting view, with a frame, a column and one row so it
         // is a genuine first-responder-capable peer of the SwiftUI content.

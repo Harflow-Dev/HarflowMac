@@ -126,7 +126,7 @@ struct ResourceSlotsTabSnapshot {
 }
 
 @MainActor
-private func resourceInteractionSnapshot(_ fixture: any ResourceSlotsNativeHosting) -> ResourceSlotsTabSnapshot {
+func resourceInteractionSnapshot(_ fixture: any ResourceSlotsNativeHosting) -> ResourceSlotsTabSnapshot {
     let element = resourceSlotsNativeFocusedElement(fixture)
     return ResourceSlotsTabSnapshot(responder: fixture.window.firstResponder, element: element,
                                     identifier: element.flatMap { fixture.string($0, "accessibilityIdentifier") },
