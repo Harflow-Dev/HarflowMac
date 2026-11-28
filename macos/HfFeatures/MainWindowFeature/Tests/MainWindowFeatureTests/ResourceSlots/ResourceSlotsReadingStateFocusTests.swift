@@ -59,11 +59,30 @@ extension ResourceSlotsReadingStateTests {
         let stub = KeyFocusStub(current: NSResponder())
         let explicit = NSResponder()
         let state = focusState(stub)
+        var records: [ResourceSlotsDiagnosticRecord] = []
+        state.diagnosticObserver = { records.append($0) }
         // when
         state.authorizeFocusReturn(responder: explicit)
         // then
         #expect(stub.resignCalls == 0)
         #expect(state.focusReturnAuthorizedResponder === explicit)
+        let authorized = records.last { $0.event == "focus-authorized" }
+        #expect(authorized?.focusResign == .notNeeded && authorized?.focusAuthorizedKind == .other)
+    }
+
+    @Test func givenAWindowWithNoCurrentResponder_whenAuthorizing_thenItResignsAndAuthorizesTheWindow() {
+        // given
+        let stub = KeyFocusStub(current: nil)
+        let state = focusState(stub)
+        var records: [ResourceSlotsDiagnosticRecord] = []
+        state.diagnosticObserver = { records.append($0) }
+        // when
+        state.authorizeFocusReturn()
+        // then
+        #expect(stub.resignCalls == 1)
+        #expect(state.focusReturnAuthorizedResponder === stub.window)
+        let authorized = records.last { $0.event == "focus-authorized" }
+        #expect(authorized?.focusResign == .resigned && authorized?.focusAuthorizedKind == .window)
     }
 
     @Test func givenNoHostingWindow_whenAuthorizing_thenNothingIsResignedAndNoResponderIsCaptured() {

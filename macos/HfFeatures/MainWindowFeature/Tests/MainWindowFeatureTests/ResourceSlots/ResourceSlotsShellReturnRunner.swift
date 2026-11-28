@@ -21,7 +21,7 @@ struct ResourceSlotsBackLocation {
 enum ResourceSlotsStartExpectation {
     /// The Back toolbar item's proxy resigns to the window.
     case toolbarProxyToWindow
-    /// The window already holds focus: no transition.
+    /// The window already holds focus: no transition, and the authorization records no resign for the window.
     case noTransition
     /// A focused detail control's proxy resigns to the window.
     case detailControlToWindow
@@ -39,10 +39,14 @@ enum ResourceSlotsStartExpectation {
 
     var isJudged: Bool { self != .recordedOnly }
 
-    func matches(_ change: ResourceSlotsShellEvidence.ResponderChange?) -> Bool {
+    func matches(_ change: ResourceSlotsShellEvidence.ResponderChange?, startedAtWindow: Bool,
+                 resign: String, kind: String) -> Bool {
         switch self {
         case .recordedOnly: return true
-        case .noTransition: return change == nil
+        case .noTransition:
+            return change == nil && startedAtWindow
+                && resign == ResourceSlotsDiagnosticRecord.FocusResign.notNeeded.rawValue
+                && kind == ResourceSlotsDiagnosticRecord.FocusAuthorizedKind.window.rawValue
         case .toolbarProxyToWindow:
             guard let change else { return false }
             return change.from.className.contains("KeyViewProxy") && change.from.region == .toolbar && change.to.region == .window
@@ -225,6 +229,7 @@ func resourceSlotsShellRun(_ name: String, gesture: ResourceSlotsBackGesture, ri
     let cyclesBefore = evidence.cycles.count
     evidence.stamp("back-gesture-begin", String(describing: gesture))
     let beginSeq = evidence.seq
+    let startedAtWindow = fixture.window.firstResponder === fixture.window
     switch gesture {
     case .keyboard: evidence.sendSpace(target: "Back (keyboard)", backGesture: true)
     case .pointer:
@@ -284,7 +289,7 @@ func resourceSlotsShellRun(_ name: String, gesture: ResourceSlotsBackGesture, ri
     // The starting transition is the last one inside the Back action, before authorization is recorded.
     let start = evidence.changes.last { $0.seq > beginSeq && $0.seq < final.authorizedSeq }
     let startSummary = start.map { "\($0.from.summary) -> \($0.to.summary)" } ?? "no transition"
-    let startMatches = rig.expectedStart.matches(start)
+    let startMatches = rig.expectedStart.matches(start, startedAtWindow: startedAtWindow, resign: final.resign, kind: final.authorizedKind)
     evidence.startOracleLine = "expected \(rig.expectedStart.description); observed \(startSummary); resign=\(final.resign) "
         + "kind=\(final.authorizedKind); "
         + (rig.expectedStart.isJudged ? (startMatches ? "matches" : "differs") : "recorded only")

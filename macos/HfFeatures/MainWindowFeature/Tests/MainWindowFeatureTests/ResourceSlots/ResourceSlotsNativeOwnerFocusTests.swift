@@ -250,7 +250,7 @@ extension ActivityFeedApprovalHostedTests {
         let back = try #require(fixture.element("Back to resource slots"))
         try resourceInteractionRequireActiveHost(fixture, model)
         var authorization: ResourceSlotsDiagnosticRecord?
-        trace.productionTap = { record in if record.event == "focus-authorized" { authorization = record } }
+        trace.productionTap = { record in if record.event == "focus-authorized", authorization == nil { authorization = record } }
         try #require(fixture.press(back))
         // then: the table was resigned to the window at Back, and the owner control is still restored.
         #expect(authorization?.focusResign == .resigned && authorization?.focusAuthorizedKind == .window,

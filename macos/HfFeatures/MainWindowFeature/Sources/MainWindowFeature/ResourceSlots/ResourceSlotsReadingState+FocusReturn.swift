@@ -3,18 +3,19 @@ import AppKit
 // MARK: - ResourceSlotsReadingState focus return
 
 extension ResourceSlotsReadingState {
-    /// `responder` captures the keyboard responder at Back. By default the departing keyboard
-    /// focus is resigned to the content's own hosting window (recorded while mounted and kept
-    /// across the departure) and the window is authorized, so the focus held by a control that
-    /// the Back transition removes (the toolbar Back item, or a control in the detail being
-    /// left) is never mistaken for a user's choice when the focus system reassigns it. The
-    /// resign runs only when a return will be attempted, no explicit responder was passed, a
-    /// window is recorded and its responder is not already the window. When the responder
-    /// refuses to resign, or an explicit responder is passed, that responder is captured as
-    /// before and stays neutral during restoration.
+    /// `responder` captures the keyboard responder at Back. By default Back resigns the departing
+    /// keyboard focus, wherever it is and including focus held by a control the transition
+    /// removes (the toolbar Back item, or a control in the detail being left), to the content's
+    /// own hosting window (recorded while mounted and kept across the departure), and only then
+    /// authorizes the window, so that focus is never mistaken for a user's choice when the focus
+    /// system reassigns it. The resign runs only when a return will be attempted, no explicit
+    /// responder was passed, a window is recorded and its responder is not already the window.
+    /// When the responder refuses to resign, or an explicit responder is passed, that responder
+    /// is captured as before and stays neutral during restoration.
     ///
-    /// Resigning ends field-editor editing in the detail being left, which commits or drops
-    /// marked (IME) text. That is accepted: the detail unmounts at Back anyway.
+    /// Resigning ends field-editor or marked-text (IME) editing in any departing focused text
+    /// field, not only one in the detail being left, which commits or drops the marked text.
+    /// That is accepted: the departing focus is abandoned at Back anyway.
     func authorizeFocusReturn(responder: NSResponder? = nil) {
         focusReturnAuthorized = focusedRowID != nil
         let host = keyFocusHost
