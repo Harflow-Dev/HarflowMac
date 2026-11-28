@@ -399,7 +399,7 @@ func resourceInteractionForeground(_ fixture: RedesignHost) async throws {
 }
 
 @MainActor
-func resourceInteractionScroll(_ fixture: RedesignHost) -> NSScrollView? {
+func resourceInteractionScroll(_ fixture: any ResourceSlotsNativeHosting) -> NSScrollView? {
     resourceSlotsAttachedScroll(fixture)?.scroll
 }
 
@@ -467,7 +467,7 @@ private func resourceInteractionAXDiagnostic(_ fixture: RedesignHost) -> String 
 }
 
 @MainActor
-func resourceInteractionFocusedLabel(_ fixture: RedesignHost) -> String? {
+func resourceInteractionFocusedLabel(_ fixture: any ResourceSlotsNativeHosting) -> String? {
     let focused = resourceSlotsNativeFocusedElement(fixture)
     guard let focused else { return nil }
     return fixture.string(focused, "accessibilityLabel") ?? fixture.string(focused, "accessibilityTitle")

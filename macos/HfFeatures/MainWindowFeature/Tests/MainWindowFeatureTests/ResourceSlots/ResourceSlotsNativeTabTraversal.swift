@@ -25,14 +25,35 @@ struct ResourceSlotsTabTraversalResult {
 }
 
 private struct ResourceSlotsTabDestination: Hashable {
-    let element: ObjectIdentifier
+    let element: ObjectIdentifier?
     let responder: ObjectIdentifier
+}
+
+/// What a Tab traversal is looking for. An identifier target keeps the original strict
+/// destination validation; a predicate target (a control without an accessibility identifier,
+/// such as a toolbar item) is matched on the focus snapshot instead.
+struct ResourceSlotsTabTarget {
+    let name: String
+    let requiresIdentifier: Bool
+    let matches: @MainActor (ResourceSlotsTabSnapshot) -> Bool
+
+    static func identifier(_ identifier: String) -> ResourceSlotsTabTarget {
+        .init(name: identifier, requiresIdentifier: true) { $0.identifier == identifier }
+    }
+
+    static func predicate(_ name: String, _ matches: @escaping @MainActor (ResourceSlotsTabSnapshot) -> Bool) -> ResourceSlotsTabTarget {
+        .init(name: name, requiresIdentifier: false, matches: matches)
+    }
 }
 
 // MARK: - Helpers
 
 @MainActor
-func resourceInteractionTab(_ window: NSWindow) {
+func resourceInteractionTab(_ window: NSWindow, input: ResourceSlotsShellEvidence? = nil, target: String = "tab") {
+    if let input {
+        input.sendTab(target: target)
+        return
+    }
     for type in [NSEvent.EventType.keyDown, .keyUp] {
         guard let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [],
                                            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
@@ -44,11 +65,11 @@ func resourceInteractionTab(_ window: NSWindow) {
 
 /// Waits up to three seconds for the predicate and reports whether it held.
 @MainActor
-func resourceInteractionWait(_ fixture: RedesignHost, until predicate: () -> Bool) async -> Bool {
+func resourceInteractionWait(_ fixture: any ResourceSlotsNativeHosting, until predicate: () -> Bool) async -> Bool {
     await waitUntil(timeout: 3) {
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.005))
-        fixture.host.layoutSubtreeIfNeeded()
-        fixture.host.displayIfNeeded()
+        fixture.contentRoot.layoutSubtreeIfNeeded()
+        fixture.contentRoot.displayIfNeeded()
         return predicate()
     }
     return predicate()
@@ -58,7 +79,8 @@ func resourceInteractionWait(_ fixture: RedesignHost, until predicate: () -> Boo
 /// pair of buttons inside a plain container view (never the window's theme frame) must pass
 /// focus from the first to the second. The container is removed afterwards.
 @MainActor
-func resourceInteractionQualifyTabDelivery(_ fixture: RedesignHost) async -> Bool {
+func resourceInteractionQualifyTabDelivery(_ fixture: any ResourceSlotsNativeHosting,
+                                           input: ResourceSlotsShellEvidence? = nil) async -> Bool {
     let container = NSView(frame: CGRect(x: 12, y: 12, width: 260, height: 40))
     let first = NSButton(title: "Tab probe A", target: nil, action: nil)
     first.frame = CGRect(x: 0, y: 0, width: 120, height: 30)
@@ -68,10 +90,10 @@ func resourceInteractionQualifyTabDelivery(_ fixture: RedesignHost) async -> Boo
     container.addSubview(second)
     first.nextKeyView = second
     second.nextKeyView = first
-    fixture.host.addSubview(container)
+    fixture.contentRoot.addSubview(container)
     var qualified = false
     if fixture.window.makeFirstResponder(first) {
-        resourceInteractionTab(fixture.window)
+        resourceInteractionTab(fixture.window, input: input, target: "tab delivery probe")
         qualified = await resourceInteractionWait(fixture) { fixture.window.firstResponder === second }
     }
     container.removeFromSuperview()
@@ -81,18 +103,20 @@ func resourceInteractionQualifyTabDelivery(_ fixture: RedesignHost) async -> Boo
 }
 
 @MainActor
-private func resourceInteractionFocusableCount(_ fixture: RedesignHost) -> Int {
+func resourceInteractionFocusableCount(_ fixture: any ResourceSlotsNativeHosting) -> Int {
     var seen = Set<ObjectIdentifier>()
     let elements = fixture.descendants.flatMap { fixture.elements(in: $0) }.filter { seen.insert(ObjectIdentifier($0)).inserted }
     let roles: Set = ["AXButton", "AXDisclosureTriangle"]
     return elements.filter { roles.contains(fixture.string($0, "accessibilityRole") ?? "") }.count
 }
 
-private struct ResourceSlotsTabSnapshot {
+struct ResourceSlotsTabSnapshot {
     let responder: NSResponder?
     let element: NSObject?
     let identifier: String?
     let role: String?
+    /// The focused element's accessibility label, else its title.
+    let text: String?
 
     var responderName: String { responder.map { String(describing: type(of: $0)) } ?? "nil" }
     var label: String { "\(identifier ?? "nil")|\(role ?? "nil")" }
@@ -102,19 +126,31 @@ private struct ResourceSlotsTabSnapshot {
 }
 
 @MainActor
-private func resourceInteractionSnapshot(_ fixture: RedesignHost) -> ResourceSlotsTabSnapshot {
+private func resourceInteractionSnapshot(_ fixture: any ResourceSlotsNativeHosting) -> ResourceSlotsTabSnapshot {
     let element = resourceSlotsNativeFocusedElement(fixture)
     return ResourceSlotsTabSnapshot(responder: fixture.window.firstResponder, element: element,
                                     identifier: element.flatMap { fixture.string($0, "accessibilityIdentifier") },
-                                    role: element.flatMap { fixture.string($0, "accessibilityRole") })
+                                    role: element.flatMap { fixture.string($0, "accessibilityRole") },
+                                    text: element.flatMap { fixture.string($0, "accessibilityLabel") ?? fixture.string($0, "accessibilityTitle") })
 }
 
 /// Tabs from one entry point until the element with `target` as accessibility identifier is
 /// focused, a confirmed destination repeats, or the budget runs out. The reported result is
 /// scoped to this fixture and entry point.
 @MainActor
-func resourceInteractionTabToIdentifier(_ target: String, fixture: RedesignHost, entry: String,
-                                        trace: ResourceSlotsNativeTrace) async -> ResourceSlotsTabTraversalResult {
+func resourceInteractionTabToIdentifier(_ target: String, fixture: any ResourceSlotsNativeHosting, entry: String,
+                                        trace: ResourceSlotsNativeTrace,
+                                        input: ResourceSlotsShellEvidence? = nil) async -> ResourceSlotsTabTraversalResult {
+    await resourceInteractionTabToTarget(.identifier(target), fixture: fixture, entry: entry, trace: trace, input: input)
+}
+
+/// The traversal core. Entry `"current"` makes no responder change at all: the current
+/// destination is checked before the first Tab, and every Tab starts from where focus is.
+@MainActor
+// swiftlint:disable:next function_body_length cyclomatic_complexity
+func resourceInteractionTabToTarget(_ target: ResourceSlotsTabTarget, fixture: any ResourceSlotsNativeHosting, entry: String,
+                                    trace: ResourceSlotsNativeTrace, input: ResourceSlotsShellEvidence? = nil,
+                                    budgetOverride: Int? = nil) async -> ResourceSlotsTabTraversalResult {
     var result = ResourceSlotsTabTraversalResult(entry: entry)
     guard fixture.window.isKeyWindow, NSApp.isActive else {
         result.steps.append("host not key/active")
@@ -125,7 +161,7 @@ func resourceInteractionTabToIdentifier(_ target: String, fixture: RedesignHost,
     guard result.entryAvailable else { return result }
     await fixturelessSettlePump(5)
 
-    let budget = max(12, 3 * resourceInteractionFocusableCount(fixture))
+    let budget = budgetOverride ?? max(12, 3 * resourceInteractionFocusableCount(fixture))
     // Strong references keep every recorded identity unique for the whole traversal.
     var retained: [AnyObject] = []
     defer { withExtendedLifetime(retained) {} }
@@ -133,9 +169,15 @@ func resourceInteractionTabToIdentifier(_ target: String, fixture: RedesignHost,
     var labels: [ObjectIdentifier: String] = [:]
     var previous = resourceInteractionSnapshot(fixture)
     retained.append(contentsOf: previous.retainedObjects)
+    if entry == "current", target.matches(previous), previous.responder != nil {
+        result.steps.append("0:already-at-target:id=\(previous.identifier ?? "nil"):role=\(previous.role ?? "nil")"
+            + ":responder=\(previous.responderName)")
+        result.reached = true
+        return result
+    }
     for step in 1 ... budget {
         let before = (previous.responderID, previous.elementID)
-        resourceInteractionTab(fixture.window)
+        resourceInteractionTab(fixture.window, input: input, target: "tab toward " + target.name)
         let changed = await resourceInteractionWait(fixture) {
             let current = resourceInteractionSnapshot(fixture)
             return (current.responderID, current.elementID) != before
@@ -160,16 +202,22 @@ func resourceInteractionTabToIdentifier(_ target: String, fixture: RedesignHost,
             continue
         }
         // Every destination check runs before the target is accepted.
-        guard let focused = current.element, let currentResponder = current.responder,
-              resourceInteractionValidate(current, previous: previous, labels: &labels) else {
+        guard let currentResponder = current.responder else {
             result.ambiguous = true
             continue
         }
-        if current.identifier == target {
+        if target.requiresIdentifier {
+            guard current.element != nil, resourceInteractionValidate(current, previous: previous, labels: &labels) else {
+                result.ambiguous = true
+                continue
+            }
+        }
+        if target.matches(current) {
             result.reached = true
             return result
         }
-        let destination = ResourceSlotsTabDestination(element: ObjectIdentifier(focused), responder: ObjectIdentifier(currentResponder))
+        let destination = ResourceSlotsTabDestination(element: current.element.map(ObjectIdentifier.init),
+                                                      responder: ObjectIdentifier(currentResponder))
         if !destinations.insert(destination).inserted {
             result.exhausted = true
             return result
@@ -195,10 +243,14 @@ private func resourceInteractionValidate(_ current: ResourceSlotsTabSnapshot, pr
 }
 
 @MainActor
-private func resourceInteractionEnter(_ entry: String, fixture: RedesignHost,
+private func resourceInteractionEnter(_ entry: String, fixture: any ResourceSlotsNativeHosting,
                                       result: inout ResourceSlotsTabTraversalResult) async -> Bool {
+    if entry == "current" {
+        result.steps.append("entry responder=" + (fixture.window.firstResponder.map { String(describing: type(of: $0)) } ?? "nil"))
+        return true
+    }
     if entry == "host" {
-        let accepted = fixture.window.makeFirstResponder(fixture.host)
+        let accepted = fixture.window.makeFirstResponder(fixture.contentRoot)
         result.steps.append("entry responder=" + (fixture.window.firstResponder.map { String(describing: type(of: $0)) } ?? "nil"))
         return accepted
     }

@@ -164,7 +164,7 @@ private func resourceSlotsLegacyTypeString(_ buffer: [CChar]) -> String {
 }
 
 @MainActor
-func resourceSlotsNativeFocusedElement(_ fixture: RedesignHost) -> NSObject? {
+func resourceSlotsNativeFocusedElement(_ fixture: any ResourceSlotsNativeHosting) -> NSObject? {
     if let focused = resourceSlotsModernFocusedObject(fixture.window) ?? resourceSlotsModernFocusedObject(NSApp) { return focused }
     var seen = Set<ObjectIdentifier>()
     let focused = fixture.descendants.flatMap { fixture.elements(in: $0) }.filter {
@@ -174,7 +174,7 @@ func resourceSlotsNativeFocusedElement(_ fixture: RedesignHost) -> NSObject? {
 }
 
 @MainActor
-func resourceSlotsNativeReaderSurvey(_ control: NSObject, fixture: RedesignHost) -> [String: String] {
+func resourceSlotsNativeReaderSurvey(_ control: NSObject, fixture: any ResourceSlotsNativeHosting) -> [String: String] {
     let modernValue = resourceSlotsNativeValue(control)
     return [
         "modernRole": fixture.string(control, "accessibilityRole") ?? "unreadable",

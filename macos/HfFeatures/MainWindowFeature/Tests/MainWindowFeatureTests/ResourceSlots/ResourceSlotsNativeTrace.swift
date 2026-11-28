@@ -90,7 +90,7 @@ final class ResourceSlotsNativeTrace {
         let disclosurePressSurvey = "See header-action milestones; absent milestones mean native Press/Space was not reached"
     }
 
-    private weak var fixture: RedesignHost?
+    private weak var fixture: (any ResourceSlotsNativeHosting)?
     private let state: ResourceSlotsReadingState
     private let scenario: String
     private var sequence: UInt64 = 0
@@ -109,7 +109,7 @@ final class ResourceSlotsNativeTrace {
     private weak var trackedOwner: NSObject?
     private var finished = false
 
-    init(state: ResourceSlotsReadingState, fixture: RedesignHost, scenario: String) {
+    init(state: ResourceSlotsReadingState, fixture: any ResourceSlotsNativeHosting, scenario: String) {
         self.state = state
         self.fixture = fixture
         self.scenario = scenario
@@ -165,7 +165,11 @@ final class ResourceSlotsNativeTrace {
         append(source: "fixture", event: "native-presentation", details: ["targetObservedByExistingOracle": String(owner != nil)], isGeometry: true)
     }
 
+    /// Test-side tap that sees every production diagnostic synchronously, before the trace buffers it.
+    var productionTap: (@MainActor (ResourceSlotsDiagnosticRecord) -> Void)?
+
     private func receive(_ record: ResourceSlotsDiagnosticRecord) {
+        productionTap?(record)
         let kind: String? = record.event == "departure" ? "departure" : record.finishReason == nil ? nil : "terminal"
         append(source: "production", event: record.event, production: record, isGeometry: record.category == .geometry, mandatoryKind: kind)
     }
@@ -351,7 +355,7 @@ final class ResourceSlotsNativeTrace {
         fixture.flatMap { resourceSlotsAttachedScroll($0)?.scroll }
     }
 
-    private func visibleGroupHeaders(_ fixture: RedesignHost) -> [String] {
+    private func visibleGroupHeaders(_ fixture: any ResourceSlotsNativeHosting) -> [String] {
         var seen = Set<ObjectIdentifier>()
         let viewport = nativeScroll().map { $0.contentView.convert($0.contentView.bounds, to: nil) }
         return fixture.descendants
@@ -396,9 +400,9 @@ final class ResourceSlotsNativeTrace {
                             attachedIdentity: resourceSlotsAttachedScroll(fixture)?.details,
                             outerWindowFrame: fixture.window.frame, contentLayoutRect: fixture.window.contentLayoutRect,
                             toolbarIdentity: fixture.window.toolbar.map { String(describing: ObjectIdentifier($0)) },
-                            chromeDelta: CGSize(width: fixture.window.frame.width - fixture.host.bounds.width,
-                                                height: fixture.window.frame.height - fixture.host.bounds.height),
-                            windowContentFlipped: fixture.host.isFlipped, clipFlipped: clip?.isFlipped, documentFlipped: document?.isFlipped,
+                            chromeDelta: CGSize(width: fixture.window.frame.width - fixture.contentRoot.bounds.width,
+                                                height: fixture.window.frame.height - fixture.contentRoot.bounds.height),
+                            windowContentFlipped: fixture.contentRoot.isFlipped, clipFlipped: clip?.isFlipped, documentFlipped: document?.isFlipped,
                             rawClipBounds: clip?.bounds, rawDocumentBounds: document?.bounds, rawDocumentVisibleRect: scroll?.documentVisibleRect,
                             clipBoundsInDocument: clipInDocument, nativeTopInset: scroll?.contentInsets.top, nativeBottomInset: scroll?.contentInsets.bottom,
                             normalizedRawDocumentOffset: normalizedOffset,
@@ -431,7 +435,8 @@ struct ResourceSlotsNativeCoordinateProbe {
 }
 
 @MainActor
-func resourceSlotsNativeCoordinateProbe(_ owner: NSObject, fixture: RedesignHost, scroll: NSScrollView) -> ResourceSlotsNativeCoordinateProbe? {
+func resourceSlotsNativeCoordinateProbe(_ owner: NSObject, fixture: any ResourceSlotsNativeHosting,
+                                        scroll: NSScrollView) -> ResourceSlotsNativeCoordinateProbe? {
     guard let rect = fixture.frame(owner), let document = scroll.documentView else { return nil }
     let clip = scroll.contentView
     let inClip = clip.convert(rect, from: nil)

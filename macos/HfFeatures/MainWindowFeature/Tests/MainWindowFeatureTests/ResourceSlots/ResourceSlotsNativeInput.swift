@@ -28,7 +28,7 @@ struct ResourceSlotsAttachedScroll {
 
 // One resolver for setup, calibration, tracing and viewport assertions, including short content.
 @MainActor
-func resourceSlotsAttachedScroll(_ fixture: RedesignHost) -> ResourceSlotsAttachedScroll? {
+func resourceSlotsAttachedScroll(_ fixture: any ResourceSlotsNativeHosting) -> ResourceSlotsAttachedScroll? {
     for scroll in fixture.descendants.compactMap({ $0 as? NSScrollView }) {
         let clip = scroll.contentView
         guard let document = scroll.documentView, scroll.window === fixture.window, scroll.superview != nil,

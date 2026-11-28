@@ -104,7 +104,12 @@ final class MainWindowNavigationCoordinatorMock: MainWindowNavigationCoordinator
     /// Shows the shell's "Back to resource slots" toolbar item when true.
     var resourceReturnAvailable = false
     var canReturnToResourceSlots: Bool { resourceReturnAvailable }
-    func returnToResourceSlots() {}
+    /// Lets an integrated test mount the resource slots screen (with its own view model) under the real shell.
+    @ObservationIgnored var resourceSlotsBuilder: (@MainActor () -> AnyView)?
+    func buildResourceSlotsView() -> AnyView { resourceSlotsBuilder?() ?? AnyView(EmptyView()) }
+    /// Lets an integrated test replay the production return order when the shell's Back item fires.
+    @ObservationIgnored var onReturnToResourceSlots: (@MainActor () -> Void)?
+    func returnToResourceSlots() { onReturnToResourceSlots?() }
     
     func start() -> AnyView { MainWindowNavigationView(self).eraseToAnyView() }
 
