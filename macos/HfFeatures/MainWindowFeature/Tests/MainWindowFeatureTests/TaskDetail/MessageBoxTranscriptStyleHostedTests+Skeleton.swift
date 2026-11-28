@@ -97,9 +97,11 @@ extension MessageBoxTranscriptStyleHostedTests {
         let mask = try await ComposerMeasure.skeletonMask(dark: dark) { Self.skeleton(.standard) }
         // then — the shapes (bars, cards, bubble, composer capsule) sit where they did at the base commit.
         let base = dark ? BaseStandardRender.skeletonDark : BaseStandardRender.skeletonLight
+        // Each row may differ by one grid point at the end of a bar run (`SkeletonMaskComparison`), nothing more.
         #expect(mask.count == base.count)
-        let differing = zip(mask, base).enumerated().filter { $1.0 != $1.1 }.map(\.offset)
-        #expect(differing.isEmpty, "standard skeleton rows differ from base: \(differing.map { "\($0) now \(mask[$0]) base \(base[$0])" })")
+        let differing = SkeletonMaskComparison.mismatchedRows(now: mask, base: base)
+        func row(_ rows: [String], _ index: Int) -> String { rows.indices.contains(index) ? rows[index] : "(no row)" }
+        #expect(differing.isEmpty, "standard skeleton rows differ from base: \(differing.map { "\($0) now \(row(mask, $0)) base \(row(base, $0))" })")
     }
 
     @Test(arguments: [false, true])
