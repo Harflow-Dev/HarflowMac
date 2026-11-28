@@ -39,6 +39,7 @@ extension ResourceSlotsShellEvidence {
             trace.mark("shell-cycle", details: [
                 "cycle": String(cycle.id), "authorizedSeq": String(cycle.authorizedSeq),
                 "authorizedResponder": cycle.authorizedResponder.summary,
+                "resign": cycle.resign, "authorizedKind": cycle.authorizedKind,
                 "authorizedResponderID": cycle.authorizedResponder.identity.map { String(describing: $0) } ?? "nil",
                 "requestToken": cycle.requestToken?.uuidString ?? "none", "requestSeq": cycle.requestSeq.map(String.init) ?? "none",
                 "terminal": cycle.terminalEvent ?? "none", "terminalSeq": cycle.terminalSeq.map(String.init) ?? "none",

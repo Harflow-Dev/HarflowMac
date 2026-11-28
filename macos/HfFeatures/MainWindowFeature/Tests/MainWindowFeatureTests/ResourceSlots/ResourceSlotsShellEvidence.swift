@@ -75,6 +75,9 @@ final class ResourceSlotsShellEvidence {
         let authorizedSeq: Int
         let authorizedAt: TimeInterval
         let authorizedResponder: ResponderRecord
+        /// The production `focus-authorized` diagnostic's resign outcome and authorized responder kind.
+        let resign: String
+        let authorizedKind: String
         var requestToken: UUID?
         var requestSeq: Int?
         var terminalEvent: String?
@@ -273,7 +276,9 @@ final class ResourceSlotsShellEvidence {
         switch record.event {
         case "focus-authorized":
             cycles.append(Cycle(id: cycles.count + 1, authorizedSeq: sequence, authorizedAt: now,
-                                authorizedResponder: describe(state.focusReturnAuthorizedResponder)))
+                                authorizedResponder: describe(state.focusReturnAuthorizedResponder),
+                                resign: record.focusResign?.rawValue ?? "none",
+                                authorizedKind: record.focusAuthorizedKind?.rawValue ?? "none"))
         case "focus-request":
             if !cycles.isEmpty {
                 cycles[cycles.count - 1].requestToken = state.focusReturnRequest?.token

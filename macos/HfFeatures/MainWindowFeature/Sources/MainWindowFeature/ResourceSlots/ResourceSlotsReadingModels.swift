@@ -44,6 +44,10 @@ extension ResourceSlotsOwner {
 struct ResourceSlotsDiagnosticRecord: Codable, Equatable, Sendable {
     enum Category: String, Codable, Sendable { case transition, geometry }
     enum FinishReason: String, Codable, Sendable { case success, boundaryAligned, boundedFallback, userCancellation, unmount, runtimeChange }
+    /// `notNeeded`: no resign was attempted; `resigned`: the departing focus went to the window;
+    /// `refused`: the responder would not resign; `noWindow`: no hosting window was recorded.
+    enum FocusResign: String, Codable, Sendable { case notNeeded, resigned, refused, noWindow }
+    enum FocusAuthorizedKind: String, Codable, Sendable { case window, view, other, absent = "nil" }
     struct TargetFrame: Codable, Equatable, Sendable {
         let viewport: CGRect
         let measurementOffset: CGFloat
@@ -100,6 +104,10 @@ struct ResourceSlotsDiagnosticRecord: Codable, Equatable, Sendable {
     let focusReturnAuthorized: Bool
     let focusRestorationPending: Bool
     let finishReason: FinishReason?
+    /// Only on `focus-authorized`: what Back did to the departing keyboard focus.
+    let focusResign: FocusResign?
+    /// Only on `focus-authorized`: the kind of the authorized responder after the resign.
+    let focusAuthorizedKind: FocusAuthorizedKind?
 }
 
 // MARK: - ResourceSlotsDiagnosticFrames

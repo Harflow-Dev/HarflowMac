@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keyboard focus returns to the resource owner after Back from the toolbar with Full Keyboard Access on.
+
 ## 0.1.0
 
 - Indent nested Markdown list items in agent messages and summaries by 20 points per level (HarflowDesign `be5c743`, `.hd-msg-agent ul`), with disc, circle and square bullets by depth. Nesting follows the item's indentation (2 or 4 spaces, or tabs) up to four levels; ordered markers stay as written, and bullet glyphs are hidden from VoiceOver.

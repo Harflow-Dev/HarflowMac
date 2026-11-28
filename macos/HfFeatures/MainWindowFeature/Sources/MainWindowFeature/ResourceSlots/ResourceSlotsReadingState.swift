@@ -56,9 +56,12 @@ final class ResourceSlotsReadingState {
     @ObservationIgnored var focusReturnAuthorized = false
     /// The responder holding keyboard focus at Back. Only a responder change after this
     /// authorization counts as user focus movement; this exact responder stays neutral.
-    @ObservationIgnored private weak var focusResponder: NSResponder?
+    @ObservationIgnored weak var focusResponder: NSResponder?
     /// The window hosting the mounted content, recorded through the presented-frame seam.
     @ObservationIgnored private weak var hostingWindow: NSWindow?
+    /// How Back reaches the hosting window's keyboard focus. The production value reads the weak
+    /// `hostingWindow` through `self` on every call; tests replace it with a window-free stub.
+    @ObservationIgnored lazy var keyFocusHost = ResourceSlotsKeyFocusHost.production(for: self)
     /// Issued at every appearance and handed to every owner control with its focus observation.
     /// Only a current-generation observation is live: a stale (or nil) generation belongs to an
     /// earlier, superseded appearance and must not touch the current restoration. Deliberately
@@ -104,16 +107,6 @@ final class ResourceSlotsReadingState {
         selected = false
         invalidateCommands()
         recordDiagnostic(event: "departure")
-    }
-
-    /// `responder` captures the keyboard responder at Back. By default it is the first
-    /// responder of the content's own hosting window (recorded while mounted and kept across
-    /// the departure), so the returning owner does not mistake the pre-existing focus for
-    /// user movement even when another app window happens to be key.
-    func authorizeFocusReturn(responder: NSResponder? = nil) {
-        focusReturnAuthorized = focusedRowID != nil
-        focusResponder = focusReturnAuthorized ? (responder ?? hostingWindow?.firstResponder) : nil
-        recordDiagnostic(event: "focus-authorized")
     }
 
     /// The responder captured at Back, for the native control's neutral-responder comparison.

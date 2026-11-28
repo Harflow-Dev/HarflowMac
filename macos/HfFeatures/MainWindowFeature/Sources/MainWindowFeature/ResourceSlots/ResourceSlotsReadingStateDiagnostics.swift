@@ -56,7 +56,9 @@ extension ResourceSlotsReadingState {
     func recordDiagnostic(event: String, category: ResourceSlotsDiagnosticRecord.Category = .transition,
                           callbackTarget: ResourceSlotsScrollTarget? = nil, viewport: CGRect? = nil,
                           content: CGRect? = nil, callbackGeometry: ResourceSlotsScrollGeometry? = nil, rejection: String? = nil,
-                          finishReason: ResourceSlotsDiagnosticRecord.FinishReason? = nil, previousAnchor: Anchor? = nil) {
+                          finishReason: ResourceSlotsDiagnosticRecord.FinishReason? = nil, previousAnchor: Anchor? = nil,
+                          focusResign: ResourceSlotsDiagnosticRecord.FocusResign? = nil,
+                          focusAuthorizedKind: ResourceSlotsDiagnosticRecord.FocusAuthorizedKind? = nil) {
         guard let diagnosticObserver else { return }
         diagnosticSequence &+= 1
         let owner = (retainedAnchor?.rowID ?? focusedRowID).flatMap { owners[$0] }
@@ -84,7 +86,7 @@ extension ResourceSlotsReadingState {
             coordinateSpaceDelta: Self.coordinateSpaceDelta,
             rejection: rejection, focusedRowID: focusedRowID, confirmedFocusID: diagnosticConfirmedFocusID,
             focusReturnAuthorized: focusReturnAuthorized, focusRestorationPending: focusRestorationPending,
-            finishReason: finishReason
+            finishReason: finishReason, focusResign: focusResign, focusAuthorizedKind: focusAuthorizedKind
         ))
     }
 

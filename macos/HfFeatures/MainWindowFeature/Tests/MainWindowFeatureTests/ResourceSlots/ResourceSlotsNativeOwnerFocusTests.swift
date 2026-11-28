@@ -210,9 +210,10 @@ extension ActivityFeedApprovalHostedTests {
         try await resourceInteractionQualifyKeyboardHost(fixture, model)
         let rowID = model.rowIDs[0]
         let ownerLabel = model.actionLabel(rowID)
-        // A persistent sibling table holds keyboard focus before Back. authorizeFocusReturn either
-        // captures it as the authorized responder or resigns it to the window and authorizes the
-        // window; in both cases the owner must still be restored.
+        // A persistent sibling table holds keyboard focus before Back. Back resigns it to the window
+        // before authorizing, so the authorized responder is the window; the owner must still be
+        // restored. The authorization is read from the production diagnostic, captured when it is
+        // recorded, not from the responder after the press returns.
         // NSHostingView does not support foreign subviews, so the table lives in a window-level
         // AppKit container beside the hosting view, with a frame, a column and one row so it
         // is a genuine first-responder-capable peer of the SwiftUI content.
@@ -248,8 +249,12 @@ extension ActivityFeedApprovalHostedTests {
         await fixture.settle { fixture.element("Back to resource slots") != nil }
         let back = try #require(fixture.element("Back to resource slots"))
         try resourceInteractionRequireActiveHost(fixture, model)
+        var authorization: ResourceSlotsDiagnosticRecord?
+        trace.productionTap = { record in if record.event == "focus-authorized" { authorization = record } }
         try #require(fixture.press(back))
-        // then: the owner control is still restored over the authorized sibling responder.
+        // then: the table was resigned to the window at Back, and the owner control is still restored.
+        #expect(authorization?.focusResign == .resigned && authorization?.focusAuthorizedKind == .window,
+                "focus-authorized resign=\(String(describing: authorization?.focusResign)) kind=\(String(describing: authorization?.focusAuthorizedKind))")
         await fixture.settle {
             coordinator.selection == .resourceSlots && model.appearances == 3
                 && resourceInteractionFocusedLabel(fixture) == ownerLabel

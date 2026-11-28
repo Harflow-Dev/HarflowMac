@@ -285,7 +285,8 @@ func resourceSlotsShellRun(_ name: String, gesture: ResourceSlotsBackGesture, ri
     let start = evidence.changes.last { $0.seq > beginSeq && $0.seq < final.authorizedSeq }
     let startSummary = start.map { "\($0.from.summary) -> \($0.to.summary)" } ?? "no transition"
     let startMatches = rig.expectedStart.matches(start)
-    evidence.startOracleLine = "expected \(rig.expectedStart.description); observed \(startSummary); "
+    evidence.startOracleLine = "expected \(rig.expectedStart.description); observed \(startSummary); resign=\(final.resign) "
+        + "kind=\(final.authorizedKind); "
         + (rig.expectedStart.isJudged ? (startMatches ? "matches" : "differs") : "recorded only")
     trace.mark("shell-start-oracle", details: ["variant": name, "expected": rig.expectedStart.description, "observed": startSummary,
                                                "result": startMatches ? "matches" : "differs"])
@@ -312,6 +313,7 @@ func resourceSlotsShellRun(_ name: String, gesture: ResourceSlotsBackGesture, ri
     let verdict = resourceSlotsShellClassify(observation)
     trace.mark("shell-verdict", details: [
         "variant": name, "verdict": verdict.headline, "authorizedResponder": final.authorizedResponder.summary,
+        "resign": final.resign, "authorizedKind": final.authorizedKind,
         "terminal": final.terminalEvent ?? "none", "backFired": evidence.backFiredPhase(final),
         "startOracle": evidence.startOracleLine ?? "none", "priorLeakedEvent": evidence.priorLeakedEvent ?? "none",
         "counts": "auth=\(observation.authorized) request=\(observation.requests) restored=\(observation.restored) "
