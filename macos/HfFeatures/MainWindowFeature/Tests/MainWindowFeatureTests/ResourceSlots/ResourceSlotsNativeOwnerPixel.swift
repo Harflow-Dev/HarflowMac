@@ -114,6 +114,35 @@ func fixturelessSettle(_ predicate: @MainActor () -> Bool) async {
     }
 }
 
+/// Waits up to three seconds and reports whether the predicate held, so a timeout is an
+/// explicit result instead of a silent fall-through.
+@MainActor
+func fixturelessWait(_ predicate: @MainActor () -> Bool) async -> Bool {
+    await waitUntil(timeout: 3) {
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.005))
+        return predicate()
+    }
+    return predicate()
+}
+
+extension ResourceSlotsOwnerPixelProbe {
+    /// Records which responder and which accessibility element hold focus, so a failed
+    /// acquisition names the element that kept it rather than only a responder class.
+    func focusDiagnostic(window: NSWindow, control: ResourceSlotsOwnerButton.Control) -> String {
+        let focused = resourceSlotsModernFocusedObject(window) ?? resourceSlotsModernFocusedObject(NSApp)
+        let selector = NSSelectorFromString("accessibilityIdentifier")
+        var identifier = "nil"
+        if let focused, focused.responds(to: selector),
+           let value = focused.perform(selector)?.takeUnretainedValue() as? String {
+            identifier = value
+        }
+        let responder = window.firstResponder.map { String(describing: type(of: $0)) } ?? "nil"
+        return "responder=\(responder), focusedAXIdentifier=\(identifier), "
+            + "focusedAXIsReference=\(identifier == "resource-slots-owner-pixel-reference"), "
+            + "hasPendingFocusRequest=\(control.hasPendingFocusRequest)"
+    }
+}
+
 @MainActor
 func fixturelessSettlePump(_ frames: Int) async {
     var pumped = 0

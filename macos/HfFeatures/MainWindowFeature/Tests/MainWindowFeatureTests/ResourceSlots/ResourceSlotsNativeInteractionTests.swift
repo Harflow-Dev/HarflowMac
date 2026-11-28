@@ -166,24 +166,22 @@ extension ActivityFeedApprovalHostedTests {
         trace.mark("header-native-press-collapsed")
         try resourceInteractionRequireViewport(fixture, expectedClipSize: originalClipSize, expectedWindowSize: originalWindowSize)
 
-        // then: AX-requested focus and real Space reopen the same control — but only under the
-        // platform's keyboard focus policy. With Full Keyboard Access off, macOS ignores a
-        // modern `setAccessibilityFocused` request on a SwiftUI button (measured: the focused
-        // element stays nil), so the keyboard steps can only run when the setting is on; with
-        // it off the same control is reopened through its qualified native Press instead, and
-        // the skip is recorded. Tab traversal is qualified separately either way.
+        // then: under Full Keyboard Access the header must be reachable by real Tab traversal
+        // and toggle on a real Space; the model, not accessibility state, is the oracle. With
+        // Full Keyboard Access off, macOS keeps buttons out of the key-view loop, so the
+        // keyboard steps cannot run and the same control is reopened through its qualified
+        // native Press instead; the skip is recorded. A bare accessibility focus request is
+        // not used: it does not move SwiftUI focus on this node.
         let fullKeyboardAccess = NSApp.isFullKeyboardAccessEnabled
-        trace.mark("header-AX-requested-focus", details: ["provesTabTraversal": "false", "provesOwnerRestoration": "false",
-                                                          "fullKeyboardAccess": String(fullKeyboardAccess)])
+        trace.mark("header-keyboard-path", details: ["provesTabTraversal": "false", "provesOwnerRestoration": "false",
+                                                     "fullKeyboardAccess": String(fullKeyboardAccess)])
         if fullKeyboardAccess {
-            resourceSlotsRequestNativeFocus(collapsed)
-            await fixture.settle { resourceInteractionFocusedIdentifier(fixture) == "resource-slots-group-native-resource" }
+            try await resourceInteractionReachHeaderByTab(fixture, model: model, trace: trace)
             try resourceInteractionRequireActiveHost(fixture, model)
-            try #require(resourceInteractionFocusedIdentifier(fixture) == "resource-slots-group-native-resource",
-                         Comment(rawValue: resourceInteractionDiagnostic(fixture, model)))
             resourceInteractionSpace(fixture.window)
             await fixture.settle { model.expandedResourceIDs.contains("native-resource") }
-            try #require(model.expandedResourceIDs.contains("native-resource"))
+            try #require(model.expandedResourceIDs.contains("native-resource"),
+                         Comment(rawValue: resourceInteractionDiagnostic(fixture, model)))
             trace.mark("header-keyboard-space-expanded")
         } else {
             // Platform policy, user decision: never change the user's keyboard setting. With
@@ -490,12 +488,6 @@ private func resourceInteractionRequireHeader(_ fixture: RedesignHost, value: St
     #expect(label.contains("Native resource") && label.contains("Synthetic observed holdings"))
     try resourceSlotsRequireNativeHeader(control, fixture: fixture, expanded: value == "Expanded")
     return control
-}
-
-@MainActor
-private func resourceInteractionFocusedIdentifier(_ fixture: RedesignHost) -> String? {
-    let object = resourceSlotsNativeFocusedElement(fixture)
-    return object.flatMap { fixture.string($0, "accessibilityIdentifier") }
 }
 
 @MainActor

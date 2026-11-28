@@ -317,11 +317,26 @@ extension ActivityFeedApprovalHostedTests {
         try resourceInteractionExpectDimmedTitle(enabled: enabled, disabled: disabled, window: window)
 
         // A focused control draws its capsule-shaped exterior focus ring around the bounds.
+        // Start from a neutral responder: the window's own initial focus may sit on a SwiftUI
+        // key-view proxy, which the owner control correctly never takes focus from. The
+        // control must then acquire focus by itself when the token arrives.
+        _ = window.makeFirstResponder(nil)
+        let becameNeutral = await fixturelessWait { window.firstResponder === window }
+        try #require(becameNeutral, Comment(rawValue: "The window must become the neutral responder: "
+                + probe.focusDiagnostic(window: window, control: enabled)))
+        await fixturelessSettlePump(5)
+        try #require(window.firstResponder === window, Comment(rawValue: "The responder must stay neutral before the token: "
+                + probe.focusDiagnostic(window: window, control: enabled)))
         let ringPoint = CGPoint(x: enabled.bounds.midX, y: enabled.bounds.minY - 3)
         let ringBefore = try resourceInteractionPixel(enabled, at: ringPoint, window: window)
         probe.focusToken = UUID()
-        await fixturelessSettle { window.firstResponder === enabled }
-        try #require(window.firstResponder === enabled, "The owner control must accept keyboard focus while a token is pending")
+        let acquired = await fixturelessWait { window.firstResponder === enabled }
+        // A timeout whose focused element is the hosted reference (or any other SwiftUI
+        // element) is evidence for F-RS-FKA-RETURN, not a fixture defect: do not reset the
+        // responder again to make this pass.
+        try #require(acquired, Comment(rawValue: "The owner control must take first responder after a focus-return token from a "
+                + "neutral responder (a non-owner focused element indicates F-RS-FKA-RETURN): "
+                + probe.focusDiagnostic(window: window, control: enabled)))
         await fixturelessSettlePump(5)
         let ringAfter = try resourceInteractionPixel(enabled, at: ringPoint, window: window)
         try #require(resourceInteractionColorDistance(ringBefore, ringAfter) > 0.08,
