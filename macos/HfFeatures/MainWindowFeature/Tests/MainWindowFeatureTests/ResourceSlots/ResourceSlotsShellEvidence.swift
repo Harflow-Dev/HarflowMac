@@ -91,13 +91,13 @@ final class ResourceSlotsShellEvidence {
     let variant: String
     private(set) var seq = 0
     private(set) var changes: [ResponderChange] = []
-    private(set) var inputs: [InputRecord] = []
+    var inputs: [InputRecord] = []
     private(set) var diagnostics: [DiagnosticEntry] = []
     private(set) var stamps: [(seq: Int, time: TimeInterval, text: String)] = []
     private(set) var cycles: [Cycle] = []
     private(set) var counts: [String: Int] = [:]
     private(set) var outsideInput: [String] = []
-    private(set) var gestureCompleteSeq: Int?
+    var gestureCompleteSeq: Int?
     private(set) var gestureRelease: String?
     /// The leak recorded by an earlier variant of this run, when there was one.
     let priorLeakedEvent: String?
@@ -110,7 +110,7 @@ final class ResourceSlotsShellEvidence {
     private var lastResponder: ResponderRecord
     private var observation: NSKeyValueObservation?
     private var monitor: Any?
-    private struct TaggedEvent {
+    struct TaggedEvent {
         let index: Int
         let event: NSEvent
         let type: NSEvent.EventType
@@ -125,16 +125,18 @@ final class ResourceSlotsShellEvidence {
     /// pending somewhere, so outside input in later variants of the same run cannot be trusted.
     static var possibleLeakedEvent: String?
 
-    private var tagged: [TaggedEvent] = []
+    var tagged: [TaggedEvent] = []
     /// Index of the posted release that ends the pointer Back gesture, while it is awaited.
-    private var pendingGestureRelease: Int?
+    var pendingGestureRelease: Int?
     /// Set when the delivery of the posted release could not be established.
-    private(set) var gestureUnresolved: String?
+    var gestureUnresolved: String?
+    /// Set when the queue changed while the release was being dispatched; the variant is then unresolved.
+    var queueDisturbed = false
     /// Whether a responder is the owner control under test; set by the flow.
     var isOwnerResponder: ((NSResponder?) -> Bool)?
     private weak var lastResponderObject: NSResponder?
     private var lastWasOwner = false
-    private var nextMouseNumber = 0x7E57_0000
+    var nextMouseNumber = 0x7E57_0000
     private var running = false
 
     init(fixture: any ResourceSlotsNativeHosting, state: ResourceSlotsReadingState, trace: ResourceSlotsNativeTrace, variant: String) {
@@ -326,7 +328,7 @@ final class ResourceSlotsShellEvidence {
     /// monitor and the queue peek. Identity always matches. A mouse event matches by type, window
     /// number and location (within 0.5 pt) plus an equal event number or a timestamp within 1 ms.
     /// A key event matches by type, key code and exact timestamp.
-    private func matchClause(_ entry: TaggedEvent, _ event: NSEvent) -> String? {
+    func matchClause(_ entry: TaggedEvent, _ event: NSEvent) -> String? {
         if entry.event === event { return "identity" }
         guard entry.type == event.type else { return nil }
         guard Self.isMouse(event.type) else {
@@ -349,7 +351,7 @@ final class ResourceSlotsShellEvidence {
     }
 
     /// Every field the matcher can use, at full precision.
-    private func fields(_ event: NSEvent) -> String {
+    func fields(_ event: NSEvent) -> String {
         var parts = ["type=\(event.type.rawValue)", "window=\(event.windowNumber)", String(format: "timestamp=%.9f", event.timestamp)]
         if Self.isMouse(event.type) {
             parts.append(String(format: "location=%.4f,%.4f", event.locationInWindow.x, event.locationInWindow.y))
@@ -361,12 +363,12 @@ final class ResourceSlotsShellEvidence {
         return parts.joined(separator: " ")
     }
 
-    private func log(_ text: String) {
+    func log(_ text: String) {
         eventLog.append((next(), text))
     }
 
     @discardableResult
-    private func register(_ event: NSEvent, kind: String, target: String, backGesture: Bool) -> Int {
+    func register(_ event: NSEvent, kind: String, target: String, backGesture: Bool) -> Int {
         sampleResponder(source: "pre-input")
         let tag = tagKey(event)
         let isKey = event.type == .keyDown || event.type == .keyUp
@@ -383,7 +385,7 @@ final class ResourceSlotsShellEvidence {
         return record.index
     }
 
-    private func finish(_ index: Int, release: String? = nil, endSeq: Int? = nil) {
+    func finish(_ index: Int, release: String? = nil, endSeq: Int? = nil) {
         inputs[index].endSeq = endSeq ?? next()
         inputs[index].deliveredAt = now
         if let release { inputs[index].release = release }
@@ -440,70 +442,6 @@ final class ResourceSlotsShellEvidence {
             finish(index, release: "sendEvent")
         }
         if backGesture { completeGesture(release: "key release delivered") }
-    }
-
-    /// Tracking-safe click: the release is queued before the press is sent, so a tracking loop
-    /// finds it. Only a monitor-observed release is resolved: gesture completion is stamped after
-    /// its dispatch, from the run loop. Anything else is "unresolved". Whether the release was
-    /// consumed inside a tracking loop is never claimed. A queued release matched to this click is
-    /// removed; an unobserved release that is not in the queue may be a leaked event.
-    func click(at point: CGPoint, target: String) -> String {
-        let window = fixture.window
-        let base = nextMouseNumber
-        nextMouseNumber += 2
-        func mouse(_ type: NSEvent.EventType, _ number: Int) -> NSEvent? {
-            NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: now, windowNumber: window.windowNumber,
-                               context: nil, eventNumber: number, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0)
-        }
-        guard let down = mouse(.leftMouseDown, base), let up = mouse(.leftMouseUp, base + 1) else { return "events not created" }
-        gestureCompleteSeq = nil
-        gestureUnresolved = nil
-        let upIndex = register(up, kind: "mouseUp (posted)", target: target, backGesture: true)
-        pendingGestureRelease = upIndex
-        NSApp.postEvent(up, atStart: true)
-        let downIndex = register(down, kind: "mouseDown (sendEvent)", target: target, backGesture: true)
-        window.sendEvent(down)
-        let returnedSeq = next()
-        finish(downIndex, release: "sendEvent", endSeq: returnedSeq)
-        stamp("release-after-press", queuedDescription(upIndex))
-        let deadline = Date(timeIntervalSinceNow: 0.5)
-        while gestureCompleteSeq == nil, Date() < deadline {
-            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.005))
-        }
-        if gestureCompleteSeq != nil { return "dispatched" }
-        pendingGestureRelease = nil
-        var state = "the monitor observed the release but completion was not stamped"
-        if inputs[upIndex].release == nil {
-            if let clause = queuedClause(upIndex) {
-                _ = NSApp.nextEvent(matching: .leftMouseUp, until: .distantPast, inMode: .default, dequeue: true)
-                inputs[upIndex].release = "unresolved (queued, removed)"
-                state = "the release stayed queued (matched by \(clause)) and was removed"
-            } else {
-                inputs[upIndex].release = "unresolved (not observed, not in the queue)"
-                state = "the release was not observed and not found in the queue: possible leaked event"
-                Self.possibleLeakedEvent = "variant \(variant): the release posted at seq #\(inputs[upIndex].startSeq) "
-                    + "was neither observed nor found in the queue"
-            }
-        }
-        gestureUnresolved = "release unobserved; delivery unresolved (\(state))"
-        stamp("back-gesture-unresolved", gestureUnresolved ?? "")
-        return "unresolved"
-    }
-
-    /// The clause by which the first queued left-mouse-up is the tagged event at `index`, or `nil`.
-    private func queuedClause(_ index: Int) -> String? {
-        guard let entry = tagged.first(where: { $0.index == index }),
-              let queued = NSApp.nextEvent(matching: .leftMouseUp, until: .distantPast, inMode: .default, dequeue: false)
-        else { return nil }
-        return matchClause(entry, queued)
-    }
-
-    private func queuedDescription(_ index: Int) -> String {
-        guard let queued = NSApp.nextEvent(matching: .leftMouseUp, until: .distantPast, inMode: .default, dequeue: false) else {
-            return "no left-mouse-up queued; release \(inputs[index].release ?? "not yet observed")"
-        }
-        let clause = queuedClause(index).map { "matched by \($0)" } ?? "not matched"
-        return "queued (\(clause)): " + fields(queued)
     }
 
     private func completeGesture(release: String, at seq: Int? = nil) {
