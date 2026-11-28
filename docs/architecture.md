@@ -551,10 +551,12 @@ the draft per item id (kept across popover close, dropped once the item leaves t
 (`MenuBarQuestionState.Phase`) in `MenuBarVM+Questions.swift`; `MenuBarVM.phase(for:item:draft:)` is the pure outcome mapping.
 `NeedsYouAnswerOutcome.failed` carries the message, the refusal code (a Code line on the card) and `legacyText`, the text the main
 window has always shown; `.unknown` is the resume's timeout or no-answer outcome, classified in `NeedsYouAnswerOutcome.classify`.
-An accepted, already-answered, stale, changed, caller-returned or approval outcome settles the card; a stale outcome shows the runtime's own reason text (as the main window does) and a changed outcome shows the fixed "This request changed. Review it again." line; settled and unknown cards are held
-per item id until `didPopoverClose()` even once the snapshot no longer lists the item. A failed answer keeps the field and
-offers Answer and Open in Harflow. An unknown delivery disables the field, offers Open Needs you and is never resent automatically (the card resets on popover close, and the person can send again): the use
-case sends one resume per tap and the VM ignores a submit in every phase but editing and failed.
+An accepted, already-answered, stale, changed, caller-returned or approval outcome settles the card; a stale outcome shows the
+runtime's own reason text (as the main window does) and a changed outcome shows the fixed "This request changed. Review it again."
+line; settled and unknown cards are held per item id until `didPopoverClose()` even once the snapshot no longer lists the item. A
+failed answer keeps the field and offers Answer and Open in Harflow. An unknown delivery disables the field, offers Open Needs you
+and is never resent automatically (the card resets on popover close, and the person can send again): the use case sends one resume
+per tap and the VM ignores a submit in every phase but editing and failed.
 
 
 ## Native workflow library

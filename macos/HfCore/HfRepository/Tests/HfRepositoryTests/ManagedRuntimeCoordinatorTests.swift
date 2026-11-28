@@ -15,8 +15,11 @@ struct ManagedRuntimeCoordinatorTests {
         private(set) var callCount = 0
         var failures: [Bool]
         let checkExistingFailure: Bool
+        let prepareFailureMessage: String
 
-        init(ready: ManagedRuntimeReady, gate: AsyncGate? = nil, failures: [Bool] = [], checkExistingFailure: Bool = false) {
+        init(ready: ManagedRuntimeReady, gate: AsyncGate? = nil, failures: [Bool] = [], checkExistingFailure: Bool = false,
+             prepareFailureMessage: String = "fixture acquisition failed") {
+            self.prepareFailureMessage = prepareFailureMessage
             self.ready = ready
             self.gate = gate
             self.failures = failures
@@ -37,7 +40,7 @@ struct ManagedRuntimeCoordinatorTests {
                 return failures.isEmpty ? false : failures.removeFirst()
             }
             gate?.waitSync()
-            if shouldFail { throw ManagedRuntimeFailure("fixture acquisition failed") }
+            if shouldFail { throw ManagedRuntimeFailure(prepareFailureMessage) }
             return ready
         }
 
@@ -134,16 +137,25 @@ struct ManagedRuntimeCoordinatorTests {
 
     @Test func givenFailedRuntime_whenInstallFailsAgain_thenTheNewFailureIsVisible() async {
         // given
-        let coordinator = ManagedRuntimeCoordinator(installer: ControlledInstaller(ready: ready(), failures: [true], checkExistingFailure: true))
+        let installer = ControlledInstaller(ready: ready(), failures: [true], checkExistingFailure: true, prepareFailureMessage: "retry acquisition failed")
+        let coordinator = ManagedRuntimeCoordinator(installer: installer)
         let repository = ManagedInstallRepository(coordinator: coordinator, taskListRepository: NullTaskListRepository())
         _ = await coordinator.ensureReady()
+        #expect(repository.setupState == .failed("fixture acquisition failed"))
+        let callsBefore = installer.currentCallCount
+        var states: [InstallState] = []
+        let subscription = repository.statePublisher().sink { states.append($0) }
 
         // when
-        #expect(repository.setupState == .failed("fixture acquisition failed"))
         await repository.install()
 
         // then
-        #expect(repository.state == .failed(stage: .harflow, message: "fixture acquisition failed"))
+        #expect(installer.currentCallCount == callsBefore + 1)
+        #expect(states.contains(.running(.harflow)))
+        #expect(states.last == .failed(stage: .harflow, message: "retry acquisition failed"))
+        #expect(repository.state == .failed(stage: .harflow, message: "retry acquisition failed"))
+        #expect(repository.setupState == .failed("retry acquisition failed"))
+        withExtendedLifetime(subscription) {}
     }
 
     @Test func givenConcurrentReadinessCallers_whenOneAttemptIsBlocked_thenAllJoinThatAttempt() async {

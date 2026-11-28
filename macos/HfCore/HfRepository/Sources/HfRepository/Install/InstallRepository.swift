@@ -41,7 +41,8 @@ public protocol InstallRepository: Sendable {
     var state: InstallState { get }
     func statePublisher() -> AnyPublisher<InstallState, Never>
 
-    /// Allowed from `idle`, `failed` and `installed`.
+    /// Installs or updates the managed runtime. Runs only from a failed, update-failed or installation-required
+    /// runtime, retrying preparation from the start; in any other state, or while an attempt is in flight, it does nothing.
     func install() async
 }
 
