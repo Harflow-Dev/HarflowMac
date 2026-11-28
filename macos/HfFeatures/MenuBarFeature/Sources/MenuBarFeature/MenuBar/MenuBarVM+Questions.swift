@@ -100,7 +100,9 @@ extension MenuBarVM {
             let time = Date(timeIntervalSince1970: timestamp).formatted(date: .abbreviated, time: .shortened)
             return .settled(title: owner == .caller ? "Already answered by the caller" : "Answered in Harflow",
                             lines: [answer, (truncated ? "Answer excerpt · " : "") + time] + saved, action: .none)
-        case .stale, .changed:
+        case .stale(let message):
+            return .settled(title: nil, lines: [message] + saved, action: .open)
+        case .changed:
             return .settled(title: nil, lines: [NeedsYouAnswerOutcome.changedMessage] + saved, action: .open)
         case .callerReturned(let message):
             return .settled(title: nil, lines: [message] + saved, action: .open)

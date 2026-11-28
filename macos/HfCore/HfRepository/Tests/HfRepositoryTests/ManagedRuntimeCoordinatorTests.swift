@@ -79,34 +79,30 @@ struct ManagedRuntimeCoordinatorTests {
         #expect(repository.setupState == .ready)
     }
 
-    @Test func givenExplicitInstallationSuccess_whenSubscribersReturnAndDismiss_thenTheSharedNoticeClearsWithoutChangingReadiness() async {
+    @Test func givenExplicitInstallationSuccess_whenSubscribersReturn_thenTheSharedNoticeIsReplayedWithoutChangingReadiness() async {
         // given
         let coordinator = ManagedRuntimeCoordinator(installer: InstallationRequiredInstaller(ready: ready(), requiredVersion: "0.0.2"))
         let repository = ManagedInstallRepository(coordinator: coordinator, taskListRepository: NullTaskListRepository())
         _ = await coordinator.ensureReady()
-        await repository.retry()
+        await repository.install()
         #expect(repository.state == .installed)
         var states: [InstallState] = []
         let subscription = repository.statePublisher().sink { states.append($0) }
+
+        // when
         var resumed: [InstallState] = []
         let second = repository.statePublisher().sink { resumed.append($0) }
 
-        // when
-        repository.reset()
-        var afterDismissal: [InstallState] = []
-        let third = repository.statePublisher().sink { afterDismissal.append($0) }
-
         // then
-        #expect(states == [.installed, .idle])
-        #expect(resumed == [.installed, .idle])
-        #expect(afterDismissal == [.idle])
-        #expect(repository.state == .idle)
+        #expect(states == [.installed])
+        #expect(resumed == [.installed])
+        #expect(repository.state == .installed)
         #expect(repository.setupState == .ready)
         #expect(coordinator.state == .ready(ready()))
-        withExtendedLifetime((subscription, second, third)) {}
+        withExtendedLifetime((subscription, second)) {}
     }
 
-    @Test func givenUndismissedInstallationSuccess_whenTheAppRestarts_thenReusedRuntimeHasNoSuccessNotice() async {
+    @Test func givenInstallationSuccess_whenTheAppRestarts_thenReusedRuntimeHasNoSuccessNotice() async {
         // given
         let coordinator = ManagedRuntimeCoordinator(installer: InstallationRequiredInstaller(ready: ready(), requiredVersion: "0.0.2"))
         let repository = ManagedInstallRepository(coordinator: coordinator, taskListRepository: NullTaskListRepository())
@@ -131,22 +127,20 @@ struct ManagedRuntimeCoordinatorTests {
         let update = ManagedInstallRepository(coordinator: updateCoordinator, taskListRepository: NullTaskListRepository())
         _ = await updateCoordinator.ensureReady()
         #expect(update.state == .idle)
-        await update.retry()
+        await update.install()
         #expect(update.state == .installed)
         #expect(update.setupState == .ready)
     }
 
-    @Test func givenDismissedFailure_whenRetryFailsAgain_thenTheNewFailureIsVisible() async {
+    @Test func givenFailedRuntime_whenInstallFailsAgain_thenTheNewFailureIsVisible() async {
         // given
         let coordinator = ManagedRuntimeCoordinator(installer: ControlledInstaller(ready: ready(), failures: [true], checkExistingFailure: true))
         let repository = ManagedInstallRepository(coordinator: coordinator, taskListRepository: NullTaskListRepository())
         _ = await coordinator.ensureReady()
 
         // when
-        repository.reset()
-        #expect(repository.state == .idle)
         #expect(repository.setupState == .failed("fixture acquisition failed"))
-        await repository.retry()
+        await repository.install()
 
         // then
         #expect(repository.state == .failed(stage: .harflow, message: "fixture acquisition failed"))
@@ -306,7 +300,7 @@ struct ManagedRuntimeCoordinatorTests {
         #expect(repository.state == .failed(stage: .harflow, message: "fixture acquisition failed"))
 
         // when
-        await repository.retry()
+        await repository.install()
 
         // then
         #expect(repository.state == .installed)

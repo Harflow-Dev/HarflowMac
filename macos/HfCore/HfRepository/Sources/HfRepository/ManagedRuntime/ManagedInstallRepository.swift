@@ -12,7 +12,6 @@ public final class ManagedInstallRepository: InstallRepository, @unchecked Senda
     private enum Notice: Equatable {
         case none
         case installed(String)
-        case dismissedFailure(String)
     }
 
     private let notice = CurrentValueSubject<Notice, Never>(.none)
@@ -48,29 +47,9 @@ public final class ManagedInstallRepository: InstallRepository, @unchecked Senda
 .eraseToAnyPublisher()
     }
 
-    public var lastCheckMessage: String? { if case .failed(let message) = coordinator.state { message } else { nil } }
-    public func lastCheckMessagePublisher() -> AnyPublisher<String?, Never> {
-        coordinator.statePublisher()
-.map { state -> String? in
-            if case .failed(let message) = state { return message }
-            return nil
-        }
-.removeDuplicates()
-.eraseToAnyPublisher()
-    }
-
     public func install() async { await retry() }
-    public func reset() {
-        switch coordinator.state {
-        case .ready:
-            notice.send(.none)
-        case .failed(let message), .updateFailed(let message, _, _):
-            notice.send(.dismissedFailure(message))
-        default: break
-        }
-    }
 
-    public func retry() async {
+    private func retry() async {
         guard await retryOwner.claim(isFailed: { [coordinator] in
             if case .failed = coordinator.state { return true }
             if case .updateFailed = coordinator.state { return true }
@@ -89,10 +68,10 @@ public final class ManagedInstallRepository: InstallRepository, @unchecked Senda
         switch state {
         case .preparing: .running(.validate)
         case .installing, .updating: .running(.harflow)
-        case .updateFailed(let message, _, _): notice == .dismissedFailure(message) ? .idle : .failed(stage: .harflow, message: message)
+        case .updateFailed(let message, _, _): .failed(stage: .harflow, message: message)
         case .installationRequired: .idle
         case .ready(let ready): notice == .installed(ready.generationDirectory) ? .installed : .idle
-        case .failed(let message): notice == .dismissedFailure(message) ? .idle : .failed(stage: .harflow, message: message)
+        case .failed(let message): .failed(stage: .harflow, message: message)
         }
     }
 

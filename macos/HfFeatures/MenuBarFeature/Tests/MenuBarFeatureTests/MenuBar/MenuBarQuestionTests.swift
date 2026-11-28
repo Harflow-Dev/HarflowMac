@@ -163,12 +163,21 @@ import Testing
         #expect(title == "Answered in Harflow" && lines.count == 4 && lines[1].hasPrefix("Answer excerpt · "))
     }
 
-    @Test(arguments: [NeedsYouAnswerOutcome.stale("moved on"), .changed(nil)])
-    func givenStaleOrChanged_whenFinished_thenSettledChangedWithOpenAndSavedDraft(outcome: NeedsYouAnswerOutcome) async {
+    @Test(arguments: ["moved on", "This request is no longer pending."])
+    func givenStale_whenFinished_thenSettledWithTheStaleReasonOpenAndSavedDraft(message: String) async {
         // given
         let (sut, feed, _) = makeSUT([item()])
         // when
-        await submit(sut, feed: feed, draft: "Mine", outcome: outcome)
+        await submit(sut, feed: feed, draft: "Mine", outcome: .stale(message))
+        // then
+        #expect(state(sut)?.phase == .settled(title: nil, lines: [message, "Your saved draft", "Mine"], action: .open))
+    }
+
+    @Test func givenChanged_whenFinished_thenSettledChangedWithOpenAndSavedDraft() async {
+        // given
+        let (sut, feed, _) = makeSUT([item()])
+        // when
+        await submit(sut, feed: feed, draft: "Mine", outcome: .changed(nil))
         // then
         #expect(state(sut)?.phase == .settled(title: nil, lines: ["This request changed. Review it again.", "Your saved draft", "Mine"], action: .open))
     }

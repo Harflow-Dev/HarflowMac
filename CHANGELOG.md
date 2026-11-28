@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The menu bar popover shows the runtime's own message when an answered question is no longer current, as the main window does.
 - Keyboard focus returns to the resource owner after Back from the toolbar with Full Keyboard Access on.
 
 ## 0.1.0

@@ -19,11 +19,7 @@ import Testing
         func setupStatePublisher() -> AnyPublisher<RuntimeSetupState, Never> { setupSubject.eraseToAnyPublisher() }
         var state: InstallState { .installed }
         func statePublisher() -> AnyPublisher<InstallState, Never> { Just(.installed).eraseToAnyPublisher() }
-        var lastCheckMessage: String? { nil }
-        func lastCheckMessagePublisher() -> AnyPublisher<String?, Never> { Just(nil).eraseToAnyPublisher() }
         func install() async {}
-        func retry() async {}
-        func reset() {}
 
         func send(_ state: RuntimeSetupState) {
             setupState = state

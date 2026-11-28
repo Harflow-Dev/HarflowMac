@@ -41,19 +41,8 @@ public protocol InstallRepository: Sendable {
     var state: InstallState { get }
     func statePublisher() -> AnyPublisher<InstallState, Never>
 
-    /// The message from the most recent validation attempt, whether it passed or failed — the
-    /// detail text for `failed(.validate)`. Cleared by `reset()`.
-    var lastCheckMessage: String? { get }
-    func lastCheckMessagePublisher() -> AnyPublisher<String?, Never>
-
     /// Allowed from `idle`, `failed` and `installed`.
     func install() async
-
-    /// Allowed from `failed`. Resumes at the failed stage; a `.validate` failure re-validates only.
-    func retry() async
-
-    /// Allowed from `failed` and `installed` only, never from `running`. Clears `lastCheckMessage`.
-    func reset()
 }
 
 // MARK: - NullInstallRepository
@@ -62,11 +51,7 @@ public struct NullInstallRepository: InstallRepository {
     public init() {}
     public var state: InstallState { .idle }
     public func statePublisher() -> AnyPublisher<InstallState, Never> { Just(.idle).eraseToAnyPublisher() }
-    public var lastCheckMessage: String? { nil }
-    public func lastCheckMessagePublisher() -> AnyPublisher<String?, Never> { Just(nil).eraseToAnyPublisher() }
     public func install() async {}
-    public func retry() async {}
-    public func reset() {}
 }
 
 // MARK: - GlobalValues
