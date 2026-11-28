@@ -54,6 +54,7 @@ struct AppModulesRegistryTests {
         #expect(!(GlobalValues.taskSnapshotRepository is NullTaskSnapshotRepository))
         #expect(!(GlobalValues.takeoverService is NullTakeoverService))
         #expect(!(GlobalValues.backendsRepository is NullBackendsRepository))
+        #expect(!(GlobalValues.needsYouRepository is NullNeedsYouRepository))
         #expect(GlobalValues.settingsFeatureFactory is SettingsFeatureFactoryImpl)
         #expect(GlobalValues.menuBarFeatureFactory is MenuBarFeatureFactoryImpl)
         #expect(GlobalValues.mainWindowFeatureFactory is MainWindowFeatureFactoryImpl)
@@ -66,32 +67,70 @@ struct AppModulesRegistryTests {
 /// the same shape every `Module.initializeModule()` already uses to write one.
 @MainActor
 private struct GlobalValuesSnapshot {
-    private let taskListRepository = GlobalValues.taskListRepository
-    private let settingsRepository = GlobalValues.settingsRepository
-    private let toolEnvironmentRepository = GlobalValues.toolEnvironmentRepository
-    private let taskSnapshotRepository = GlobalValues.taskSnapshotRepository
-    private let eventStreamRepository = GlobalValues.eventStreamRepository
-    private let taskActionRepository = GlobalValues.taskActionRepository
-    private let harnessRepository = GlobalValues.harnessRepository
-    private let scheduling = GlobalValues.scheduling
-    private let takeoverService = GlobalValues.takeoverService
+    private let agentUsageRepository = GlobalValues.agentUsageRepository
+    private let approvalResponseOwner = GlobalValues.approvalResponseOwner
     private let backendsRepository = GlobalValues.backendsRepository
+    private let eventStreamRepository = GlobalValues.eventStreamRepository
+    private let harnessRepository = GlobalValues.harnessRepository
+    private let installRepository = GlobalValues.installRepository
+    private let modelCatalogRepository = GlobalValues.modelCatalogRepository
+    private let monitorVisibility = GlobalValues.monitorVisibility
+    private let needsYouNotifier = GlobalValues.needsYouNotifier
+    private let needsYouRepository = GlobalValues.needsYouRepository
+    private let pendingLaunchRepository = GlobalValues.pendingLaunchRepository
+    private let qualificationRepository = GlobalValues.qualificationRepository
+    private let resourceSlotsRepository = GlobalValues.resourceSlotsRepository
+    private let scheduling = GlobalValues.scheduling
+    private let settingsRepository = GlobalValues.settingsRepository
+    private let stateRecoveryRepository = GlobalValues.stateRecoveryRepository
+    private let statisticsRepository = GlobalValues.statisticsRepository
+    private let takeoverService = GlobalValues.takeoverService
+    private let taskActionRepository = GlobalValues.taskActionRepository
+    private let taskArtifactRepository = GlobalValues.taskArtifactRepository
+    private let taskChangesRepository = GlobalValues.taskChangesRepository
+    private let taskContinuationRepository = GlobalValues.taskContinuationRepository
+    private let taskListRepository = GlobalValues.taskListRepository
+    private let taskPromptRepository = GlobalValues.taskPromptRepository
+    private let taskSnapshotRepository = GlobalValues.taskSnapshotRepository
+    private let toolEnvironmentRepository = GlobalValues.toolEnvironmentRepository
+    private let workflowArtifactRepository = GlobalValues.workflowArtifactRepository
+    private let workflowRepository = GlobalValues.workflowRepository
+    private let workflowSteeringRepository = GlobalValues.workflowSteeringRepository
     private let settingsFeatureFactory = GlobalValues.settingsFeatureFactory
     private let menuBarFeatureFactory = GlobalValues.menuBarFeatureFactory
     private let mainWindowFeatureFactory = GlobalValues.mainWindowFeatureFactory
-    
+
     func restore() {
         GlobalValues
-            .environment(\.taskListRepository, taskListRepository)
-            .environment(\.settingsRepository, settingsRepository)
-            .environment(\.toolEnvironmentRepository, toolEnvironmentRepository)
-            .environment(\.taskSnapshotRepository, taskSnapshotRepository)
-            .environment(\.eventStreamRepository, eventStreamRepository)
-            .environment(\.taskActionRepository, taskActionRepository)
-            .environment(\.harnessRepository, harnessRepository)
-            .environment(\.scheduling, scheduling)
-            .environment(\.takeoverService, takeoverService)
+            .environment(\.agentUsageRepository, agentUsageRepository)
+            .environment(\.approvalResponseOwner, approvalResponseOwner)
             .environment(\.backendsRepository, backendsRepository)
+            .environment(\.eventStreamRepository, eventStreamRepository)
+            .environment(\.harnessRepository, harnessRepository)
+            .environment(\.installRepository, installRepository)
+            .environment(\.modelCatalogRepository, modelCatalogRepository)
+            .environment(\.monitorVisibility, monitorVisibility)
+            .environment(\.needsYouNotifier, needsYouNotifier)
+            .environment(\.needsYouRepository, needsYouRepository)
+            .environment(\.pendingLaunchRepository, pendingLaunchRepository)
+            .environment(\.qualificationRepository, qualificationRepository)
+            .environment(\.resourceSlotsRepository, resourceSlotsRepository)
+            .environment(\.scheduling, scheduling)
+            .environment(\.settingsRepository, settingsRepository)
+            .environment(\.stateRecoveryRepository, stateRecoveryRepository)
+            .environment(\.statisticsRepository, statisticsRepository)
+            .environment(\.takeoverService, takeoverService)
+            .environment(\.taskActionRepository, taskActionRepository)
+            .environment(\.taskArtifactRepository, taskArtifactRepository)
+            .environment(\.taskChangesRepository, taskChangesRepository)
+            .environment(\.taskContinuationRepository, taskContinuationRepository)
+            .environment(\.taskListRepository, taskListRepository)
+            .environment(\.taskPromptRepository, taskPromptRepository)
+            .environment(\.taskSnapshotRepository, taskSnapshotRepository)
+            .environment(\.toolEnvironmentRepository, toolEnvironmentRepository)
+            .environment(\.workflowArtifactRepository, workflowArtifactRepository)
+            .environment(\.workflowRepository, workflowRepository)
+            .environment(\.workflowSteeringRepository, workflowSteeringRepository)
             .environment(\.settingsFeatureFactory, settingsFeatureFactory)
             .environment(\.menuBarFeatureFactory, menuBarFeatureFactory)
             .environment(\.mainWindowFeatureFactory, mainWindowFeatureFactory)
